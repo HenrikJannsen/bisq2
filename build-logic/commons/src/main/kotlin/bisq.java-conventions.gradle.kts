@@ -39,6 +39,13 @@ dependencies {
         testCompileOnly(it)
     }
 
+    versionCatalog.findLibrary("micronaut").ifPresent {
+        compileOnly(it)
+        annotationProcessor(it)
+        testAnnotationProcessor(it)
+        testCompileOnly(it)
+    }
+
     versionCatalog.findLibrary("slf4j-api").ifPresent {
         implementation(it)
     }

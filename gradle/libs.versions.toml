@@ -41,12 +41,15 @@ i2p-lib = { strictly = '1.8.0' }
 i2p-v2 = { strictly = '2.4.0' }
 
 jackson-lib = { strictly = '2.13.3' }
+jakarta-validation-api-lib = { strictly = '3.0.2' }
 java-dev-jna-lib = { strictly = '5.13.0' }
 jeromq-lib = { strictly = '0.5.2' }
 junit-jupiter-lib = { strictly = '5.8.2' }
 kotlindsl-plugin = { strictly = '2.1.7' }
 logback-lib = { strictly = '1.2.11' }
 lombok-lib = { strictly = '1.18.22' }
+micronaut-lib = { strictly = '4.3.6' }
+micronaut-plugin = { strictly = '4.3.6' }
 mockito-lib = { strictly = '4.11.0' }
 openjfx-plugin = { strictly = '0.0.12' }
 openjfx-monocle-lib = { strictly = 'jdk-12.0.1+2'}
@@ -120,6 +123,8 @@ jackson-core = { module = 'com.fasterxml.jackson.core:jackson-core', version.ref
 jackson-annotations = { module = 'com.fasterxml.jackson.core:jackson-annotations', version.ref = 'jackson-lib' }
 jackson-databind = { module = 'com.fasterxml.jackson.core:jackson-databind', version.ref = 'jackson-lib' }
 
+jakarta-validation-api = { module = 'jakarta.validation:jakarta.validation-api', version.ref = 'jakarta-validation-api-lib' }
+
 java-dev-jna = { module = 'net.java.dev.jna:jna', version.ref = 'java-dev-jna-lib' }
 jeromq = { module = 'org.zeromq:jeromq', version.ref = 'jeromq-lib' }
 junit-jupiter = { module = 'org.junit.jupiter:junit-jupiter', version.ref = 'junit-jupiter-lib' }
@@ -127,6 +132,23 @@ junit-jupiter = { module = 'org.junit.jupiter:junit-jupiter', version.ref = 'jun
 logback-core = { module = 'ch.qos.logback:logback-core', version.ref = 'logback-lib' }
 logback-classic = { module = 'ch.qos.logback:logback-classic', version.ref = 'logback-lib' }
 lombok = { module = 'org.projectlombok:lombok', version.ref = 'lombok-lib' }
+
+
+micronaut-openapi-annotations = { module = 'io.micronaut.openapi:micronaut-openapi-annotations', version.ref = 'micronaut-lib' }
+micronaut-serde-jackson = { module = 'io.micronaut.serde:micronaut-serde-jackson', version.ref = 'micronaut-lib' }
+micronaut-validation = { module = 'io.micronaut.validation:micronaut-validation', version.ref = 'micronaut-lib' }
+micronaut-http-client = { module = 'io.micronaut:micronaut-http-client', version.ref = 'micronaut-lib' }
+micronaut-http-server-netty = { module = 'io.micronaut:micronaut-http-server-netty', version.ref = 'micronaut-lib' }
+micronaut-inject = { module = 'io.micronaut:micronaut-inject', version.ref = 'micronaut-lib' }
+micronaut-jackson-databind = { module = 'io.micronaut:micronaut-jackson-databind', version.ref = 'micronaut-lib' }
+micronaut-runtime = { module = 'io.micronaut:micronaut-runtime', version.ref = 'micronaut-lib' }
+
+# annotationProcessor
+micronaut-openapi = { module = 'io.micronaut.openapi:micronaut-openapi', version.ref = 'micronaut-lib' }
+micronaut-serde-processor = { module = 'io.micronaut.serde:micronaut-serde-processor', version.ref = 'micronaut-lib' }
+micronaut-validation-processor = { module = 'io.micronaut.validation:micronaut-validation-processor', version.ref = 'micronaut-lib' }
+micronaut-http-validation = { module = 'io.micronaut:micronaut-http-validation', version.ref = 'micronaut-lib' }
+
 
 mockito = { module = 'org.mockito:mockito-core', version.ref = 'mockito-lib' }
 openjfx-monocle = { module = 'org.testfx:openjfx-monocle', version.ref = 'openjfx-monocle-lib' }
@@ -160,6 +182,9 @@ grpc = ['grpc-protobuf', 'grpc-services', 'grpc-stub']
 i2p = ['i2p-core', 'i2p-router', 'i2p-streaming']
 i2p-v2 = ['i2p-core-v2', 'i2p-streaming-v2']
 jackson = ['jackson-core', 'jackson-annotations', 'jackson-databind']
+micronaut = ['micronaut-openapi-annotations', 'micronaut-serde-jackson', 'micronaut-validation', 'micronaut-http-client',
+    'micronaut-http-server-netty', 'micronaut-inject', 'micronaut-jackson-databind', 'micronaut-runtime',
+    'micronaut-openapi', 'micronaut-serde-processor', 'micronaut-validation-processor', 'micronaut-http-validation']
 springfox-libs = ['springfox-boot-starter', 'springfox-swagger2', 'springfox-swagger-ui']
 
 # Referenced in subproject's build.gradle > plugin block as alias: `alias(libs.plugins.protobuf)`
@@ -170,3 +195,5 @@ springfox-libs = ['springfox-boot-starter', 'springfox-swagger2', 'springfox-swa
 kotlindsl = { id = 'org.gradle.kotlin.kotlin-dsl', version.ref = 'kotlindsl-plugin' }
 openjfx = { id = 'org.openjfx.javafxplugin', version.ref = 'openjfx-plugin' }
 shadow = { id = 'com.github.johnrengelman.shadow', version.ref = 'shadow-plugin' }
+micronaut = { id = 'io.micronaut.library', version.ref = 'micronaut-plugin' }
+
