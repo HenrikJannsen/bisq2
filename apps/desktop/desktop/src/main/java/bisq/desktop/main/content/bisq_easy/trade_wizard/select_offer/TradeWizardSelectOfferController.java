@@ -19,6 +19,7 @@ package bisq.desktop.main.content.bisq_easy.trade_wizard.select_offer;
 
 import bisq.account.payment_method.FiatPaymentMethod;
 import bisq.bisq_easy.BisqEasyService;
+import bisq.bisq_easy.BisqEasyServiceUtil;
 import bisq.bisq_easy.NavigationTarget;
 import bisq.bonded_roles.market_price.MarketPriceService;
 import bisq.chat.ChatService;
@@ -28,7 +29,6 @@ import bisq.common.currency.Market;
 import bisq.common.monetary.Monetary;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.view.Controller;
-import bisq.desktop.main.content.bisq_easy.BisqEasyServiceUtil;
 import bisq.i18n.Res;
 import bisq.network.identity.NetworkId;
 import bisq.offer.Direction;

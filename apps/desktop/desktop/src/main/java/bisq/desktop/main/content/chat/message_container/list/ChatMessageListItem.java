@@ -17,6 +17,7 @@
 
 package bisq.desktop.main.content.chat.message_container.list;
 
+import bisq.bisq_easy.BisqEasyServiceUtil;
 import bisq.bonded_roles.market_price.MarketPriceService;
 import bisq.chat.ChatChannel;
 import bisq.chat.ChatMessage;
@@ -31,7 +32,6 @@ import bisq.common.observable.Pin;
 import bisq.common.observable.map.HashMapObserver;
 import bisq.common.util.StringUtils;
 import bisq.desktop.common.threading.UIThread;
-import bisq.desktop.main.content.bisq_easy.BisqEasyServiceUtil;
 import bisq.desktop.main.content.components.ReputationScoreDisplay;
 import bisq.i18n.Res;
 import bisq.network.NetworkService;

@@ -27,8 +27,8 @@ dependencies {
     implementation("bisq:application")
 
     implementation("network:network-common")
-    implementation("network:network")
     implementation("network:network-identity")
+    implementation("network:network")
 
     implementation("wallets:electrum")
     implementation("wallets:bitcoind")

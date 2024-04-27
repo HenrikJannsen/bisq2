@@ -18,7 +18,10 @@ dependencies {
     implementation(project(":support"))
     implementation(project(":presentation"))
 
+    implementation("network:network-common")
+    implementation("network:network-identity")
     implementation("network:network")
+
     implementation("wallets:electrum")
     implementation("wallets:bitcoind")
 
