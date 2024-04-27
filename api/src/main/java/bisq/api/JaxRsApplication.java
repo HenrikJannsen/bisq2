@@ -4,6 +4,7 @@ import bisq.api.application.VersionApi;
 import bisq.api.chat.ChatApi;
 import bisq.api.error.CustomExceptionMapper;
 import bisq.api.error.StatusException;
+import bisq.api.offer.bisq_easy.BisqEasyOfferApi;
 import bisq.api.security.keys.KeyBundleApi;
 import bisq.api.user.identity.UserIdentityApi;
 import bisq.common.application.Service;
@@ -46,9 +47,11 @@ public class JaxRsApplication extends ResourceConfig implements Service {
                 .register(VersionApi.class)
                 .register(KeyBundleApi.class)
                 .register(UserIdentityApi.class)
+                .register(BisqEasyOfferApi.class)
                 .register(ChatApi.class)
                 .register(SwaggerResolution.class);
     }
+
 
     @Override
     public CompletableFuture<Boolean> initialize() {

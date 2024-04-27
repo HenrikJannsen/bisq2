@@ -24,8 +24,14 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 public final class CryptoCurrency extends TradeCurrency {
+    public final static CryptoCurrency BITCOIN = new CryptoCurrency("BTC", "Bitcoin");
+
     // http://boschista.deviantart.com/journal/Cool-ASCII-Symbols-214218618
     private final static String PREFIX = "✦ ";
+
+    public CryptoCurrency(String code) {
+        super(code, code);
+    }
 
     public CryptoCurrency(String code, String name) {
         super(code, name);
