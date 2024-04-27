@@ -15,7 +15,7 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.desktop_app_launcher;
+package bisq.common.application;
 
 import bisq.common.util.JvmUtils;
 import lombok.Getter;
@@ -39,7 +39,7 @@ public class Options {
         jvmOptions.addAll(jvmOptionsFromArgs);
     }
 
-    Optional<String> getValue(String key) {
+    public Optional<String> getValue(String key) {
         String jvmOptionString = "-Dapplication." + key + "=";
         String argsOptionString = "--" + key + "=";
         return jvmOptions.stream()
@@ -52,15 +52,15 @@ public class Options {
                         .findAny());
     }
 
-    Optional<String> getAppName() {
+    public Optional<String> getAppName() {
         return getValue("appName");
     }
 
-    Optional<String> getVersion() {
+    public Optional<String> getVersion() {
         return getValue("version");
     }
 
-    Optional<Boolean> getValueAsBoolean(String key) {
+    public Optional<Boolean> getValueAsBoolean(String key) {
         return getValue(key).map("true"::equalsIgnoreCase);
     }
 }

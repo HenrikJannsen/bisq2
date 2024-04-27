@@ -17,6 +17,7 @@
 
 package bisq.desktop_app_launcher;
 
+import bisq.common.application.Options;
 import bisq.common.logging.LogSetup;
 import bisq.common.util.ExceptionUtil;
 import bisq.common.util.OsUtils;
