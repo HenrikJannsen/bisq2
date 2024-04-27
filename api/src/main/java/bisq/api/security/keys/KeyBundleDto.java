@@ -14,30 +14,39 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
-package bisq.api.api.security.keys;
+package bisq.api.security.keys;
 
 import bisq.common.encoding.Hex;
 import bisq.security.keys.KeyBundle;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 @Getter
+@EqualsAndHashCode
 @Schema(name = "KeyBundle")
 public final class KeyBundleDto {
-    private String keyId;
-    private String privateKey;
-    private String publicKey;
-    private String torPrivateKey;
-    private String onionAddress;
-
     public static KeyBundleDto from(KeyBundle keyBundle) {
-        KeyBundleDto dto = new KeyBundleDto();
-        dto.keyId = keyBundle.getKeyId();
-        dto.privateKey = Hex.encode(keyBundle.getKeyPair().getPrivate().getEncoded());
-        dto.publicKey = Hex.encode(keyBundle.getKeyPair().getPublic().getEncoded());
-        dto.torPrivateKey = Hex.encode(keyBundle.getTorKeyPair().getPrivateKey());
-        dto.onionAddress = keyBundle.getTorKeyPair().getOnionAddress();
-        return dto;
+        return new KeyBundleDto(keyBundle.getKeyId(),
+                Hex.encode(keyBundle.getKeyPair().getPrivate().getEncoded()),
+                Hex.encode(keyBundle.getKeyPair().getPublic().getEncoded()),
+                Hex.encode(keyBundle.getTorKeyPair().getPrivateKey()),
+                keyBundle.getTorKeyPair().getOnionAddress()
+        );
+    }
+
+    private final String keyId;
+    private final String privateKey;
+    private final String publicKey;
+    private final String torPrivateKey;
+    private final String onionAddress;
+
+    public KeyBundleDto(String keyId, String privateKey, String publicKey, String torPrivateKey, String onionAddress) {
+        this.keyId = keyId;
+        this.privateKey = privateKey;
+        this.publicKey = publicKey;
+        this.torPrivateKey = torPrivateKey;
+        this.onionAddress = onionAddress;
     }
 }
 

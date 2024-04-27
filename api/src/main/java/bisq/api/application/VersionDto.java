@@ -14,21 +14,25 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
-package bisq.api.api.application;
+package bisq.api.application;
 
 import bisq.common.util.Version;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 @Getter
+@EqualsAndHashCode
 @Schema(name = "Version")
 public final class VersionDto {
-    private String version;
-
     public static VersionDto from(Version version) {
-        VersionDto dto = new VersionDto();
-        dto.version = version.toString();
-        return dto;
+        return new VersionDto(version.toString());
+    }
+
+    private final String version;
+
+    public VersionDto(String version) {
+        this.version = version;
     }
 }
 

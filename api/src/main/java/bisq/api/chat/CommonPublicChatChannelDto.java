@@ -1,4 +1,4 @@
-package bisq.api.api.chat;
+package bisq.api.chat;
 
 import bisq.chat.ChatChannelDomain;
 import bisq.chat.ChatService;

@@ -1,6 +1,7 @@
-package bisq.api.api.chat;
+package bisq.api.chat;
 
-import bisq.api.api.Api;
+
+import bisq.api.Api;
 import bisq.chat.ChatChannelDomain;
 import bisq.chat.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,12 +39,12 @@ public class ChatApi extends Api {
             content = {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON,
-                            schema = @Schema(implementation = CommonPublicChatChannelDto.class)
+                            schema = @Schema(implementation = bisq.api.chat.CommonPublicChatChannelDto.class)
                     )}
     )
-    public List<CommonPublicChatChannelDto> getPublicDiscussionChannels() {
+    public List<bisq.api.chat.CommonPublicChatChannelDto> getPublicDiscussionChannels() {
         return chatService.getCommonPublicChatChannelServices().get(ChatChannelDomain.DISCUSSION).getChannels().stream()
-                .map(chatChannel -> CommonPublicChatChannelDto.from(chatService, chatChannel))
+                .map(chatChannel -> bisq.api.chat.CommonPublicChatChannelDto.from(chatService, chatChannel))
                 .collect(Collectors.toList());
     }
 
@@ -54,12 +55,12 @@ public class ChatApi extends Api {
             content = {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON,
-                            schema = @Schema(implementation = BisqEasyPublicChatChannelDto.class)
+                            schema = @Schema(implementation = bisq.api.chat.BisqEasyPublicChatChannelDto.class)
                     )}
     )
-    public List<BisqEasyPublicChatChannelDto> getPublicTradeChannels() {
+    public List<bisq.api.chat.BisqEasyPublicChatChannelDto> getPublicTradeChannels() {
         return chatService.getBisqEasyOfferbookChannelService().getChannels().stream()
-                .map(chatChannel -> BisqEasyPublicChatChannelDto.from(chatService, chatChannel))
+                .map(chatChannel -> bisq.api.chat.BisqEasyPublicChatChannelDto.from(chatService, chatChannel))
                 .collect(Collectors.toList());
     }
 }

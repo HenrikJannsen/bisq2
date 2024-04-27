@@ -1,6 +1,6 @@
-package bisq.api.api.chat;
+package bisq.api.chat;
 
-import bisq.api.common.MarketDto;
+import bisq.api.common.currency.MarketDto;
 import bisq.chat.ChatService;
 import bisq.chat.bisqeasy.offerbook.BisqEasyOfferbookChannel;
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -15,9 +15,10 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.api.api.application;
+package bisq.api.application;
 
-import bisq.api.api.Api;
+
+import bisq.api.Api;
 import bisq.application.ApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

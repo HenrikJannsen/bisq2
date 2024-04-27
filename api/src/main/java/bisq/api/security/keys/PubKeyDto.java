@@ -15,13 +15,27 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.api.api;
+package bisq.api.security.keys;
 
-import bisq.api.ApiService;
-import bisq.core.CoreServiceProvider;
+import bisq.common.encoding.Hex;
+import bisq.security.keys.PubKey;
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
-public class Api {
-    public CoreServiceProvider getCoreServiceProvider() {
-        return ApiService.getCoreServiceProvider();
+@Getter
+@EqualsAndHashCode
+@Schema(name = "PubKey")
+public final class PubKeyDto {
+    public static PubKeyDto from(PubKey pubKey) {
+        return new PubKeyDto(Hex.encode(pubKey.getPublicKey().getEncoded()), pubKey.getKeyId());
+    }
+
+    private final String publicKey;
+    private final String keyId;
+
+    public PubKeyDto(String publicKey, String keyId) {
+        this.publicKey = publicKey;
+        this.keyId = keyId;
     }
 }

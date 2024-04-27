@@ -15,9 +15,10 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.api.api.security.keys;
+package bisq.api.security.keys;
 
-import bisq.api.api.Api;
+
+import bisq.api.Api;
 import bisq.api.error.StatusException;
 import bisq.security.keys.KeyBundle;
 import bisq.security.keys.KeyBundleService;
