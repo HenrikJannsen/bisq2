@@ -16,6 +16,7 @@
  */
 package bisq.rest_api.dto;
 
+import bisq.common.encoding.Hex;
 import bisq.security.keys.KeyBundle;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
@@ -23,11 +24,19 @@ import lombok.Getter;
 @Getter
 @Schema(name = "KeyBundle")
 public final class KeyBundleDto {
-    private KeyBundle keyBundle;
+    private String keyId;
+    private String privateKey;
+    private String publicKey;
+    private String torPrivateKey;
+    private String onionAddress;
 
     public static KeyBundleDto from(KeyBundle keyBundle) {
         KeyBundleDto dto = new KeyBundleDto();
-        dto.keyBundle = keyBundle;
+        dto.keyId = keyBundle.getKeyId();
+        dto.privateKey = Hex.encode(keyBundle.getKeyPair().getPrivate().getEncoded());
+        dto.publicKey = Hex.encode(keyBundle.getKeyPair().getPublic().getEncoded());
+        dto.torPrivateKey = Hex.encode(keyBundle.getTorKeyPair().getPrivateKey());
+        dto.onionAddress = keyBundle.getTorKeyPair().getOnionAddress();
         return dto;
     }
 }

@@ -55,6 +55,7 @@ public class KeyBundleApi {
 
     /**
      * @param keyId The ID for identifying the key which we look up or create in case it does not exist.
+     *              Must be a hex encoded 20 byte hash (like: d5800ecac639a79e8f308864ae4c78f6927d66f0)
      * @return The key bundle.
      */
     @Operation(description = "find the key bundle for given ID")
@@ -67,14 +68,14 @@ public class KeyBundleApi {
     )
     @GET
     @Path("get-or-create/{key-id}")
-    public KeyBundleDto getOrCreateKeyBundle(
-            @Parameter(description = DESC_KEY_ID) @PathParam("key-id") String keyId) {
+    public KeyBundleDto getOrCreateKeyBundle(@Parameter(description = DESC_KEY_ID) @PathParam("key-id") String keyId) {
         KeyBundle keyBundle = keyBundleService.getOrCreateKeyBundle(keyId);
         return KeyBundleDto.from(keyBundle);
     }
 
     /**
      * @param keyId The ID for identifying the key which we look up.
+     *              Must be a hex encoded 20 byte hash (like: d5800ecac639a79e8f308864ae4c78f6927d66f0)
      * @return The key bundle if a key bundle with that keyId exist, otherwise null.
      */
 
