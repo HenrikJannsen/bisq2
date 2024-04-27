@@ -17,6 +17,7 @@ includeBuild("..")
 includeBuild("desktop")
 includeBuild("oracle-node")
 
+include("daemon")
 include("rest-api-app")
 include("seed-node-app")
 
