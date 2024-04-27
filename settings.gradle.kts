@@ -23,6 +23,7 @@ rootProject.name = "bisq"
 
 include("account")
 include("api")
+include("api_micronaut2")
 include("application")
 include("bisq-easy")
 include("bonded-roles")
