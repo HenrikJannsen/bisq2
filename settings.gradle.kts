@@ -22,6 +22,7 @@ toolchainManagement {
 rootProject.name = "bisq"
 
 include("account")
+include("api")
 include("application")
 include("bisq-easy")
 include("bonded-roles")
