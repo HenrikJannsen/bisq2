@@ -1,0 +1,13 @@
+{
+  "showUnsupportedFiles": true,
+  "attachmentFolderPath": "doc/img",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "doc",
+  "vimMode": true,
+  "alwaysUpdateLinks": true,
+  "useTab": false,
+  "readableLineLength": true,
+  "useMarkdownLinks": true,
+  "newLinkFormat": "relative",
+  "promptDelete": false
+}
