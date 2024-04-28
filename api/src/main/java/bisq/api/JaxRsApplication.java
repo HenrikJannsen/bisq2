@@ -1,19 +1,30 @@
 package bisq.api;
 
-import bisq.api.application.VersionApi;
-import bisq.api.chat.ChatApi;
+import bisq.api.endpoints.*;
 import bisq.api.error.CustomExceptionMapper;
 import bisq.api.error.StatusException;
-import bisq.api.offer.bisq_easy.BisqEasyOfferApi;
-import bisq.api.security.keys.KeyBundleApi;
-import bisq.api.user.identity.UserIdentityApi;
 import bisq.common.application.Service;
 import bisq.core.CoreServiceProvider;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import io.swagger.v3.core.util.Json;
+import io.swagger.v3.jaxrs2.Reader;
+import io.swagger.v3.oas.annotations.Hidden;
+import io.swagger.v3.oas.integration.SwaggerConfiguration;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.servers.Server;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Application;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.glassfish.jersey.jdkhttp.JdkHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -139,6 +150,43 @@ public class JaxRsApplication extends ResourceConfig implements Service {
             try (OutputStream outputStream = exchange.getResponseBody()) {
                 outputStream.write(NOT_FOUND.getBytes());
             }
+        }
+    }
+
+    @Slf4j
+    @Path("openapi.json")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Hidden
+    public static class SwaggerResolution {
+        @Setter
+        private static String baseUrl;
+
+        private static String swaggerJson;
+
+        @GET
+        public String swagIt(@Context Application application) {
+            if (swaggerJson == null) {
+                try {
+                    OpenAPI api = new OpenAPI();
+                    Info info = new Info()
+                            .title("Bisq DAO node REST API")
+                            .description("This is the rest API description for the Bisq DAO node, For more Information about Bisq, see https://bisq.network")
+                            .license(new License()
+                                    .name("GNU Affero General Public License")
+                                    .url("https://github.com/bisq-network/bisq2/blob/main/LICENSE"));
+
+                    api.info(info).addServersItem(new Server().url(baseUrl));
+                    SwaggerConfiguration configuration = new SwaggerConfiguration().openAPI(api);
+                    Reader reader = new Reader(configuration);
+                    OpenAPI openAPI = reader.read(application.getClasses());
+                    swaggerJson = Json.pretty(openAPI);
+                } catch (Exception exception) {
+                    log.error("", exception);
+                    throw new RuntimeException(exception);
+                }
+            }
+
+            return swaggerJson;
         }
     }
 }
