@@ -133,8 +133,8 @@ public class Bisq1BridgeService implements Service, ConfidentialMessageService.L
                 .whenComplete((result, throwable) -> {
                     networkService.addConfidentialMessageListener(this);
                     authorizedBondedRolesService.addListener(this);
-                    requestDoaDataScheduler = Scheduler.run(this::requestDoaData).periodically(0, 5, TimeUnit.SECONDS);
-                    republishAuthorizedBondedRolesScheduler = Scheduler.run(this::republishAuthorizedBondedRoles).after(5, TimeUnit.SECONDS);
+                    requestDoaDataScheduler = Scheduler.run(this::requestDoaData).periodically(60, 5, TimeUnit.SECONDS);
+                    republishAuthorizedBondedRolesScheduler = Scheduler.run(this::republishAuthorizedBondedRoles).after(60, TimeUnit.SECONDS);
                 });
     }
 
