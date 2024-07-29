@@ -265,12 +265,16 @@ public class Bisq1BridgeService implements Service, ConfidentialMessageService.L
                             .map(AuthorizedData::getAuthorizedDistributedData)
                             .filter(authorizedDistributedData -> authorizedDistributedData instanceof AuthorizedBondedRole)
                             .map(authorizedDistributedData -> (AuthorizedBondedRole) authorizedDistributedData)
-                            .flatMap(authorizedBondedRole -> authorizedBondedRole.getAuthorizingOracleNode().stream())
-                            .filter(authorizingOracleNode -> authorizingOracleNode.equals(authorizedOracleNode))
                             .forEach(authorizedBondedRole -> {
-                                // TODO deactivate republishing until issues are resolved
-                                // log.info("Republish AuthorizedBondedRole {}", authorizedBondedRole);
-                                //publishAuthorizedData(authorizedBondedRole);
+                                if (authorizedBondedRole.getAuthorizingOracleNode().isPresent() &&
+                                        authorizedBondedRole.getAuthorizingOracleNode().get().getProfileId().equals(authorizedOracleNode.getProfileId())) {
+                                    log.info("Republish AuthorizedBondedRole with bondUserName {}. authorizedOracleNode={}",
+                                            authorizedBondedRole.getBondUserName(), authorizedOracleNode.getBondUserName());
+                                    publishAuthorizedData(authorizedBondedRole);
+                                } else {
+                                    log.info("Cannot republish AuthorizedBondedRole with bondUserName {} because authorizedOracleNode is missing or not our",
+                                            authorizedBondedRole.getBondUserName());
+                                }
                             });
                 });
     }
