@@ -3,8 +3,23 @@ plugins {
     id("bisq.java-conventions")
     id("bisq.java-integration-tests")
     id("bisq.protobuf")
+    id("maven-publish")
 }
 
+group = "bisq"
+version = "2.1.1"
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            artifactId = "common"
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
 
 val torVersion: String? = project.findProperty("tor.version") as String?
 if (torVersion == null) {
