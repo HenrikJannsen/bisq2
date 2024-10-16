@@ -1,5 +1,21 @@
 plugins {
     id("bisq.java-library")
+    id("maven-publish")
+}
+
+group = "bisq"
+version = project.version
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            artifactId = "application"
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
 }
 
 dependencies {
