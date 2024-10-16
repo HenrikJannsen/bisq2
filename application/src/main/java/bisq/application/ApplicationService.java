@@ -28,7 +28,7 @@ import bisq.common.locale.LanguageRepository;
 import bisq.common.locale.LocaleRepository;
 import bisq.common.logging.AsciiLogo;
 import bisq.common.logging.LogSetup;
-import bisq.common.platform.MemoryReport;
+import bisq.internal.common.platform.MemoryReport;
 import bisq.common.platform.PlatformUtils;
 import bisq.common.util.ExceptionUtil;
 import bisq.i18n.Res;

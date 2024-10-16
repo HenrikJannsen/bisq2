@@ -15,7 +15,7 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.common.threading;
+package bisq.internal.common.threading;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;

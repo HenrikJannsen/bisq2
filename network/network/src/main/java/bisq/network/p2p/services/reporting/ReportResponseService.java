@@ -17,7 +17,7 @@
 
 package bisq.network.p2p.services.reporting;
 
-import bisq.common.platform.MemoryReport;
+import bisq.internal.common.platform.MemoryReport;
 import bisq.common.threading.ThreadName;
 import bisq.network.NetworkService;
 import bisq.network.identity.NetworkId;

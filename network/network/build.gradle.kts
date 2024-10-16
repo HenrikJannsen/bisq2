@@ -5,6 +5,7 @@ plugins {
 }
 
 dependencies {
+    implementation("bisq:internal")
     implementation("bisq:security")
     implementation("bisq:persistence")
 

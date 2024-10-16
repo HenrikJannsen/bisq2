@@ -18,7 +18,7 @@
 package bisq.persistence;
 
 import bisq.common.proto.PersistableProto;
-import bisq.common.util.CompletableFutureUtils;
+import bisq.internal.common.util.CompletableFutureUtils;
 import com.google.common.base.Joiner;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;

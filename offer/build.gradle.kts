@@ -4,6 +4,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":internal"))
     implementation(project(":persistence"))
     implementation(project(":security"))
     implementation(project(":i18n"))

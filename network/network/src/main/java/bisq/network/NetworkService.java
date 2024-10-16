@@ -23,7 +23,7 @@ import bisq.common.observable.Observable;
 import bisq.common.observable.map.ObservableHashMap;
 import bisq.common.threading.ExecutorFactory;
 import bisq.common.threading.ThreadName;
-import bisq.common.util.CompletableFutureUtils;
+import bisq.internal.common.util.CompletableFutureUtils;
 import bisq.network.common.Address;
 import bisq.network.common.AddressByTransportTypeMap;
 import bisq.network.common.TransportType;

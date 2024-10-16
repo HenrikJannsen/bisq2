@@ -28,7 +28,7 @@ import bisq.common.monetary.Monetary;
 import bisq.common.monetary.PriceQuote;
 import bisq.common.observable.collection.ObservableSet;
 import bisq.common.threading.ExecutorFactory;
-import bisq.common.util.CompletableFutureUtils;
+import bisq.internal.common.util.CompletableFutureUtils;
 import bisq.common.util.StringUtils;
 import bisq.identity.Identity;
 import bisq.identity.IdentityService;

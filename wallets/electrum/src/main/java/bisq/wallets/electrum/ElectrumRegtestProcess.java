@@ -17,7 +17,7 @@
 
 package bisq.wallets.electrum;
 
-import bisq.common.file.FileCreationWatcher;
+import bisq.internal.common.file.FileCreationWatcher;
 import bisq.common.file.FileUtils;
 import bisq.wallets.electrum.rpc.ElectrumDaemon;
 import bisq.wallets.electrum.rpc.ElectrumProcessConfig;

@@ -35,6 +35,7 @@ javafx {
 }
 
 dependencies {
+    implementation("bisq:internal")
     implementation("bisq:common")
     implementation("bisq:security")
     implementation("bisq:application")

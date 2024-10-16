@@ -22,7 +22,7 @@ import bisq.common.observable.Pin;
 import bisq.common.observable.collection.CollectionObserver;
 import bisq.common.observable.collection.ObservableSet;
 import bisq.common.timer.Scheduler;
-import bisq.common.util.CompletableFutureUtils;
+import bisq.internal.common.util.CompletableFutureUtils;
 import bisq.network.p2p.services.data.BroadcastResult;
 import bisq.offer.Offer;
 import bisq.offer.OfferMessageService;

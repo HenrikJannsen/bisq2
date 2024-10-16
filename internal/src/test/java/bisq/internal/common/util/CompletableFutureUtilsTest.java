@@ -1,5 +1,6 @@
-package bisq.common.util;
+package bisq.internal.common.util;
 
+import bisq.internal.common.util.CompletableFutureUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 

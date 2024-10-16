@@ -18,7 +18,7 @@
 package bisq.network.p2p.node;
 
 
-import bisq.common.util.CompletableFutureUtils;
+import bisq.internal.common.util.CompletableFutureUtils;
 import bisq.network.common.Address;
 import bisq.network.identity.NetworkId;
 import bisq.network.p2p.message.EnvelopePayloadMessage;

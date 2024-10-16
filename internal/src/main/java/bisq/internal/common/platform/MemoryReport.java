@@ -15,13 +15,13 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.common.platform;
+package bisq.internal.common.platform;
 
 import bisq.common.formatter.DataSizeFormatter;
 import bisq.common.formatter.SimpleTimeFormatter;
-import bisq.common.threading.ThreadProfiler;
 import bisq.common.timer.Scheduler;
 import bisq.common.util.StringUtils;
+import bisq.internal.common.threading.ThreadProfiler;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
