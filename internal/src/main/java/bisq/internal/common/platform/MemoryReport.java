@@ -17,15 +17,12 @@
 
 package bisq.internal.common.platform;
 
-import bisq.common.formatter.DataSizeFormatter;
-import bisq.common.formatter.SimpleTimeFormatter;
 import bisq.common.timer.Scheduler;
 import bisq.common.util.StringUtils;
 import bisq.internal.common.threading.ThreadProfiler;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Comparator;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -60,33 +57,42 @@ public class MemoryReport {
         if (includeThreadListInMemoryReport) {
             ThreadProfiler threadProfiler = ThreadProfiler.INSTANCE;
             int nameLength = 120;
-            String format = "%-5s\t %-8s\t %-" + nameLength + "s \t %-15s\t %-15s\t %-15s\n";
-            String header = String.format(format, "ID", "Priority", "[Group] Name", "State", "Time", "Memory");
+           // String format = "%-5s\t %-8s\t %-" + nameLength + "s \t %-15s\t %-15s\t %-15s\n";
+          //  String header = String.format(format, "ID", "Priority", "[Group] Name", "State", "Time", "Memory");
+            String format = "%-8s\t %-" + nameLength + "s \t %-15s\n";
+            String header = String.format(format,  "Priority", "[Group] Name", "State");
 
             StringBuilder customBisqThreads = new StringBuilder("Bisq custom threads:\n");
             StringBuilder jvmThreads = new StringBuilder("\nJVM threads:\n");
             customBisqThreads.append(header);
             boolean showJvmThreads = true;
             Thread.getAllStackTraces().keySet().stream()
-                    .sorted(Comparator.comparing(Thread::threadId))
+                    //.sorted(Comparator.comparing(Thread::threadId))
                     .forEach(thread -> {
+                        //long id = thread.threadId();
                         String groupName = thread.getThreadGroup().getName();
                         String threadName = thread.getName();
                         String fullName = StringUtils.truncate("[" + groupName + "] " + threadName, nameLength);
-                        String time = threadProfiler.getThreadTime(thread.threadId()).map(nanoTime ->
+                      /*  String time = threadProfiler.getThreadTime(id).map(nanoTime ->
                                         SimpleTimeFormatter.formatDuration(TimeUnit.NANOSECONDS.toMillis(nanoTime)))
                                 .orElse("N/A");
-                        String memory = threadProfiler.getThreadMemory(thread.threadId())
+                        String memory = threadProfiler.getThreadMemory(id)
                                 .map(DataSizeFormatter::format)
-                                .orElse("N/A");
+                                .orElse("N/A");*/
+
                         int priority = thread.getPriority();
-                        String line = String.format(format,
-                                thread.threadId(),
+                       /* String line = String.format(format,
+                                id,
                                 priority,
                                 fullName,
                                 thread.getState().name(),
                                 time,
                                 memory
+                        );*/
+                        String line = String.format(format,
+                                priority,
+                                fullName,
+                                thread.getState().name()
                         );
                         Set<String> excludes = Set.of("DestroyJavaVM",
                                 "JavaFX-Launcher",
