@@ -29,7 +29,7 @@ import bisq.common.encoding.Hex;
 import bisq.internal.common.platform.MemoryReport;
 import bisq.common.threading.ThreadName;
 import bisq.common.timer.Scheduler;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.identity.Identity;
 import bisq.network.NetworkService;
 import bisq.network.p2p.message.EnvelopePayloadMessage;

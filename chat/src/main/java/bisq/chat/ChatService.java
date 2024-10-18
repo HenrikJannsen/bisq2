@@ -32,7 +32,7 @@ import bisq.chat.priv.PrivateChatChannelService;
 import bisq.chat.two_party.TwoPartyPrivateChatChannel;
 import bisq.chat.two_party.TwoPartyPrivateChatChannelService;
 import bisq.common.application.Service;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.network.NetworkService;
 import bisq.persistence.PersistenceService;
 import bisq.presentation.notifications.SystemNotificationService;

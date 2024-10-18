@@ -28,5 +28,5 @@ publishing {
 }
 
 dependencies {
-    implementation(project(":internal"))
+    implementation(project(":common"))
 }

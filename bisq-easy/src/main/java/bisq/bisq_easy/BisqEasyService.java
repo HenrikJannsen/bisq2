@@ -24,7 +24,7 @@ import bisq.chat.ChatService;
 import bisq.common.application.Service;
 import bisq.common.currency.MarketRepository;
 import bisq.common.observable.Pin;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.contract.ContractService;
 import bisq.identity.IdentityService;
 import bisq.network.NetworkService;

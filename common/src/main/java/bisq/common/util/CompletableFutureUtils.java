@@ -1,4 +1,4 @@
-package bisq.internal.common.util;/*
+package bisq.common.util;/*
  * This file is part of Bisq.
  *
  * Bisq is free software: you can redistribute it and/or modify it

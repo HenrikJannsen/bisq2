@@ -18,7 +18,7 @@
 package bisq.rest_api.endpoints;
 
 import bisq.common.util.CollectionUtil;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.network.NetworkService;
 import bisq.network.common.Address;
 import bisq.network.p2p.services.reporting.Report;

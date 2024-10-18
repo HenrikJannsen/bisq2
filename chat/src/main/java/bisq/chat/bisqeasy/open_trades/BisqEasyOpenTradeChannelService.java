@@ -24,7 +24,7 @@ import bisq.chat.priv.PrivateGroupChatChannelService;
 import bisq.chat.reactions.BisqEasyOpenTradeMessageReaction;
 import bisq.chat.reactions.Reaction;
 import bisq.common.observable.collection.ObservableSet;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.common.util.StringUtils;
 import bisq.network.NetworkService;
 import bisq.network.SendMessageResult;

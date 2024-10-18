@@ -21,7 +21,7 @@ package bisq.network.p2p.node;
 import bisq.common.observable.Observable;
 import bisq.common.threading.ThreadName;
 import bisq.common.timer.Scheduler;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.common.util.ExceptionUtil;
 import bisq.common.util.StringUtils;
 import bisq.network.NetworkService;

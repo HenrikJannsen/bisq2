@@ -21,7 +21,7 @@ package bisq.network.p2p;
 import bisq.common.data.Pair;
 import bisq.common.observable.Observable;
 import bisq.common.threading.ThreadName;
-import bisq.internal.common.util.CompletableFutureUtils;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.common.util.StringUtils;
 import bisq.network.SendMessageResult;
 import bisq.network.common.Address;
