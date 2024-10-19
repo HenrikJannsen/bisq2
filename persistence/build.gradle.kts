@@ -1,5 +1,7 @@
 plugins {
-    id("bisq.java-library")
+    java
+    id("bisq.java-conventions")
+    /*id("bisq.java-library")*/
     id("bisq.protobuf")
     id("maven-publish")
 }
