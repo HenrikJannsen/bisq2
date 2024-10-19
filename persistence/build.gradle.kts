@@ -1,7 +1,10 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     id("bisq.java-library")
     id("bisq.protobuf")
     id("maven-publish")
+    alias(libs.plugins.shadow)
 }
 
 group = "bisq"
@@ -15,6 +18,28 @@ tasks.withType<Jar> {
     }
 }
 
+tasks {
+    named<Jar>("jar") {
+        manifest {
+            // doFirst {
+            //     println("project version is ${project.version}");
+            // }
+            attributes(
+                mapOf(
+                    Pair("Implementation-Title", project.name),
+                    Pair("Implementation-Version", project.version),
+                    Pair("Main-Class", "bisq.desktop_app.DesktopApp")
+                )
+            )
+        }
+    }
+
+    named<ShadowJar>("shadowJar") {
+       // val platformName = getPlatform().platformName
+      //  archiveClassifier.set(platformName + "-all")
+        archiveClassifier.set("")
+    }
+}
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
