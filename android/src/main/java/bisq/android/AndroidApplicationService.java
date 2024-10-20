@@ -54,22 +54,24 @@ public class AndroidApplicationService extends TempApplicationService {
     @Getter
     private final SecurityService securityService;
 
-    public static AndroidApplicationService getInitializedInstance() {
+    public static AndroidApplicationService getInitializedInstance(String userDataDir) {
         if (INSTANCE == null) {
             // Androids default BC version does not support all algorithms we need, thus we remove
             // it and add our BC provider
             Security.removeProvider("BC");
             Security.addProvider(new BouncyCastleProvider());
 
-            AndroidApplicationService applicationService = new AndroidApplicationService(new String[]{}, new ShutDownHandler() {
-                @Override
-                public void shutdown() {
-                }
+            AndroidApplicationService applicationService = new AndroidApplicationService(userDataDir,
+                    new String[]{},
+                    new ShutDownHandler() {
+                        @Override
+                        public void shutdown() {
+                        }
 
-                @Override
-                public void addShutDownHook(Runnable shutDownHandler) {
-                }
-            });
+                        @Override
+                        public void addShutDownHook(Runnable shutDownHandler) {
+                        }
+                    });
             applicationService.readAllPersisted().join();
             applicationService.initialize().join();
             log.info("Application service initialized");
@@ -78,8 +80,8 @@ public class AndroidApplicationService extends TempApplicationService {
         return INSTANCE;
     }
 
-    public AndroidApplicationService(String[] args, ShutDownHandler shutDownHandler) {
-        super("android", args);
+    public AndroidApplicationService(String userDataDir, String[] args, ShutDownHandler shutDownHandler) {
+        super(userDataDir, "android", args);
 
         securityService = new SecurityService(persistenceService, SecurityService.Config.from(getConfig("security")));
 

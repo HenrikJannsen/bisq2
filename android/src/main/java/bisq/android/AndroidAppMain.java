@@ -19,6 +19,7 @@ package bisq.android;
 
 import bisq.common.application.ShutDownHandler;
 import bisq.common.encoding.Hex;
+import bisq.common.platform.PlatformUtils;
 import bisq.common.threading.ThreadName;
 import bisq.security.keys.KeyBundleService;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +37,7 @@ public class AndroidAppMain {
     private AndroidNodeService androidNodeService;
 
     public AndroidAppMain() {
-        AndroidApplicationService androidApplicationService = AndroidApplicationService.getInitializedInstance();
+        AndroidApplicationService androidApplicationService = AndroidApplicationService.getInitializedInstance(PlatformUtils.getUserDataDir().toAbsolutePath().toString());
         KeyBundleService keyBundleService = androidApplicationService.getSecurityService().getKeyBundleService();
         String defaultKeyId = keyBundleService.getDefaultKeyId();
         KeyPair keyPair = keyBundleService.getOrCreateKeyBundle(defaultKeyId).getKeyPair();
@@ -47,17 +48,19 @@ public class AndroidAppMain {
     }
 
     public AndroidAppMain(String[] args) {
-        applicationService = new AndroidApplicationService(args, new ShutDownHandler() {
-            @Override
-            public void shutdown() {
+        applicationService = new AndroidApplicationService(PlatformUtils.getUserDataDir().toAbsolutePath().toString(),
+                args,
+                new ShutDownHandler() {
+                    @Override
+                    public void shutdown() {
 
-            }
+                    }
 
-            @Override
-            public void addShutDownHook(Runnable shutDownHandler) {
+                    @Override
+                    public void addShutDownHook(Runnable shutDownHandler) {
 
-            }
-        });
+                    }
+                });
 
         applicationService.readAllPersisted().join();
         applicationService.initialize()

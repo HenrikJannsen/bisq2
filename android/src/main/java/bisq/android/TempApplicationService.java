@@ -25,7 +25,6 @@ import bisq.common.locale.LanguageRepository;
 import bisq.common.locale.LocaleRepository;
 import bisq.common.logging.AsciiLogo;
 import bisq.common.logging.LogSetup;
-import bisq.common.platform.PlatformUtils;
 import bisq.common.util.ExceptionUtil;
 import bisq.i18n.Res;
 import bisq.persistence.PersistenceService;
@@ -40,6 +39,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileLock;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -70,11 +70,11 @@ public abstract class TempApplicationService implements Service {
     @ToString
     @EqualsAndHashCode
     public static final class Config {
-        private static Config from(com.typesafe.config.Config config, String[] args) {
+        private static Config from(com.typesafe.config.Config config, String[] args, String userDataDir) {
             String appName = resolveAppName(args, config);
             Path appDataDir = OptionUtils.findOptionValue(args, "--data-dir")
                     .map(Path::of)
-                    .orElse(PlatformUtils.getUserDataDir().resolve(appName));
+                    .orElse(Paths.get(userDataDir).resolve(appName));
             return new Config(appDataDir,
                     appName,
                     config.getBoolean("devMode"),
@@ -123,14 +123,14 @@ public abstract class TempApplicationService implements Service {
     protected final PersistenceService persistenceService;
     private FileLock instanceLock;
 
-    public TempApplicationService(String configFileName, String[] args) {
+    public TempApplicationService(String userDataDir, String configFileName, String[] args) {
         com.typesafe.config.Config defaultTypesafeConfig = ConfigFactory.load(configFileName);
         defaultTypesafeConfig.checkValid(ConfigFactory.defaultReference(), configFileName);
 
         String appName = resolveAppName(args, defaultTypesafeConfig.getConfig("application"));
         Path appDataDir = OptionUtils.findOptionValue(args, "--data-dir")
                 .map(Path::of)
-                .orElse(PlatformUtils.getUserDataDir().resolve(appName));
+                .orElse(Paths.get(userDataDir).resolve(appName));
         File customConfigFile = Path.of(appDataDir.toString(), "bisq.conf").toFile();
         com.typesafe.config.Config typesafeConfig;
         boolean customConfigProvided = customConfigFile.exists();
@@ -146,7 +146,7 @@ public abstract class TempApplicationService implements Service {
         }
 
         typesafeAppConfig = typesafeConfig.getConfig("application");
-        config = Config.from(typesafeAppConfig, args);
+        config = Config.from(typesafeAppConfig, args, userDataDir);
 
         Path dataDir = config.getBaseDir();
         try {

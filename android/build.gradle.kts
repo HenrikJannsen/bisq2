@@ -8,6 +8,13 @@ plugins {
 group = "bisq"
 version = project.version
 
+tasks.withType<Jar> {
+    // Include .proto files from src/main/proto into the JAR
+    from("src/main/resources") {
+        include("android.conf")
+        into("resources") // Optional: specify a directory inside the JAR where .proto files will be placed
+    }
+}
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
