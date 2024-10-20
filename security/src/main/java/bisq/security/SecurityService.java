@@ -24,11 +24,19 @@ import bisq.security.pow.equihash.EquihashProofOfWorkService;
 import bisq.security.pow.hashcash.HashCashProofOfWorkService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import java.security.Security;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public class SecurityService implements Service {
+    static {
+        if (java.security.Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+            Security.addProvider(new BouncyCastleProvider());
+        }
+    }
+
     @Getter
     public static class Config {
         private final com.typesafe.config.Config keyBundle;

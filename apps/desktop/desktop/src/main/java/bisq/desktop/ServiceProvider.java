@@ -23,7 +23,7 @@ package bisq.desktop;
 
 import bisq.account.AccountService;
 import bisq.application.ApplicationService;
-import bisq.application.ShutDownHandler;
+import bisq.common.application.ShutDownHandler;
 import bisq.bisq_easy.BisqEasyService;
 import bisq.bonded_roles.BondedRolesService;
 import bisq.bonded_roles.security_manager.alert.AlertNotificationsService;

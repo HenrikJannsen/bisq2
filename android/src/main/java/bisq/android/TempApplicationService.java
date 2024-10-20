@@ -15,7 +15,7 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.application;
+package bisq.android;
 
 import bisq.common.application.*;
 import bisq.common.currency.FiatCurrencyRepository;
@@ -25,7 +25,6 @@ import bisq.common.locale.LanguageRepository;
 import bisq.common.locale.LocaleRepository;
 import bisq.common.logging.AsciiLogo;
 import bisq.common.logging.LogSetup;
-import bisq.internal.common.platform.MemoryReport;
 import bisq.common.platform.PlatformUtils;
 import bisq.common.util.ExceptionUtil;
 import bisq.i18n.Res;
@@ -46,8 +45,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+//TODO  We use ApplicationService later once dependencies are all resolved
 @Slf4j
-public abstract class ApplicationService implements Service {
+public abstract class TempApplicationService implements Service {
     private static String resolveAppName(String[] args, com.typesafe.config.Config config) {
         return OptionUtils.findOptionValue(args, "--app-name")
                 .or(() -> {
@@ -121,11 +121,9 @@ public abstract class ApplicationService implements Service {
     protected final Config config;
     @Getter
     protected final PersistenceService persistenceService;
-    @SuppressWarnings("FieldCanBeLocal") // Pin it so that it does not get GC'ed
-    private final MemoryReport memoryReport;
     private FileLock instanceLock;
 
-    public ApplicationService(String configFileName, String[] args) {
+    public TempApplicationService(String configFileName, String[] args) {
         com.typesafe.config.Config defaultTypesafeConfig = ConfigFactory.load(configFileName);
         defaultTypesafeConfig.checkValid(ConfigFactory.defaultReference(), configFileName);
 
@@ -168,9 +166,6 @@ public abstract class ApplicationService implements Service {
             log.info("Using custom config file");
         }
 
-        memoryReport = MemoryReport.getINSTANCE();
-        memoryReport.printPeriodically(config.getMemoryReportIntervalSec(), config.isIncludeThreadListInMemoryReport());
-
         DevMode.setDevMode(config.isDevMode());
 
         Locale locale = LocaleRepository.getDefaultLocale();
@@ -178,7 +173,9 @@ public abstract class ApplicationService implements Service {
         LanguageRepository.setDefaultLanguage(locale.getLanguage());
         FiatCurrencyRepository.setLocale(locale);
         Res.setLanguage(LanguageRepository.getDefaultLanguage());
-        ResolverConfig.config();
+
+        //todo
+        //ResolverConfig.config();
 
         String absoluteDataDirPath = dataDir.toAbsolutePath().toString();
         persistenceService = new PersistenceService(absoluteDataDirPath);

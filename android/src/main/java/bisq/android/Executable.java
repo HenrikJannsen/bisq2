@@ -1,4 +1,4 @@
-package bisq.application;
+package bisq.android;
 
 import bisq.common.application.ShutDownHandler;
 import bisq.common.platform.PlatformUtils;
@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
-public abstract class Executable<T extends ApplicationService> implements ShutDownHandler {
+public abstract class Executable<T extends TempApplicationService> implements ShutDownHandler {
     protected final T applicationService;
     protected final List<Runnable> shutDownHandlers = new ArrayList<>();
     protected volatile boolean shutDownStarted;

@@ -15,7 +15,7 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.application;
+package bisq.common.application;
 
 public class NoFileLockException extends RuntimeException {
     public NoFileLockException(String message, Throwable cause) {

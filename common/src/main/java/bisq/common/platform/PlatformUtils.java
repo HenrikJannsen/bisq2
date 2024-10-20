@@ -27,6 +27,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 @Slf4j
 public class PlatformUtils {
     public static final int EXIT_SUCCESS = 0;
@@ -41,7 +43,14 @@ public class PlatformUtils {
             return Paths.get(System.getProperty("user.home"), "Library", "Application Support");
         }
 
-        // *nix
+        if (OS.isAndroid()) {
+            // We expect that the Android app writes the userDataDir at startup, so that we can access it here
+            // System.setProperty("bisq.userDataDir", BisqMobileApp.getAppContext().getFilesDir().getAbsolutePath());
+            String userDataDir = System.getProperty("bisq.userDataDir");
+            checkArgument(!userDataDir.isEmpty(), "bisq.userDataDir must be set by the client");
+            return Paths.get(userDataDir);
+        }
+
         return Paths.get(System.getProperty("user.home"), ".local", "share");
     }
 

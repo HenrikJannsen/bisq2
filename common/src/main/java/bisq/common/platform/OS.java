@@ -18,13 +18,16 @@
 package bisq.common.platform;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Locale;
 
+@Slf4j
 public enum OS {
     LINUX("linux"),
     MAC_OS("macos"),
-    WINDOWS("win");
+    WINDOWS("win"),
+    ANDROID("android");
 
     @Getter
     private final String canonicalName;
@@ -35,7 +38,11 @@ public enum OS {
 
     public static OS getOS() {
         String osName = getOsName();
-        if (isLinux(osName)) {
+        log.info("osName={}", osName);
+        // isAndroid returns Linux as osName, thus we check for it before isLinux and use additional checks inside the method
+        if (isAndroid(osName)) {
+            return OS.ANDROID;
+        } else if (isLinux(osName)) {
             return OS.LINUX;
         } else if (isMacOs(osName)) {
             return OS.MAC_OS;
@@ -69,11 +76,35 @@ public enum OS {
         return osName.contains("win");
     }
 
+    public static boolean isAndroid(String osName) {
+        if (isLinux(osName)) {
+            return isAndroid();
+        } else {
+            return false;
+        }
+    }
+
+    public static boolean isAndroid() {
+        //  String property = System.getProperty("java.vendor");
+        //        return "The Android Project".equals(property);
+        log.info("vendor={}", getJavaVendor());
+        try {
+            Class.forName("android.os.Build");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     public static String getOsName() {
         return System.getProperty("os.name").toLowerCase(Locale.US);
     }
 
     public static String getOsVersion() {
         return System.getProperty("os.version");
+    }
+
+    public static String getJavaVendor() {
+        return System.getProperty("java.vendor");
     }
 }

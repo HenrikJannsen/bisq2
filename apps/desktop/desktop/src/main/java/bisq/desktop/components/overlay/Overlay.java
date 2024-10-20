@@ -17,7 +17,7 @@
 
 package bisq.desktop.components.overlay;
 
-import bisq.application.ShutDownHandler;
+import bisq.common.application.ShutDownHandler;
 import bisq.common.application.ApplicationVersion;
 import bisq.common.file.FileUtils;
 import bisq.common.locale.LanguageRepository;

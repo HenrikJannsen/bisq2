@@ -15,42 +15,17 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.desktop_app;
+package bisq.android;
 
-import bisq.account.AccountService;
-import bisq.application.ApplicationService;
 import bisq.common.application.ShutDownHandler;
-import bisq.bisq_easy.BisqEasyService;
-import bisq.bonded_roles.BondedRolesService;
-import bisq.bonded_roles.security_manager.alert.AlertNotificationsService;
-import bisq.chat.ChatService;
-import bisq.common.application.Service;
 import bisq.common.observable.Observable;
-import bisq.common.util.CompletableFutureUtils;
 import bisq.common.util.ExceptionUtil;
-import bisq.contract.ContractService;
-import bisq.desktop.ServiceProvider;
-import bisq.desktop.State;
-import bisq.desktop.webcam.WebcamAppService;
-import bisq.identity.IdentityService;
-import bisq.network.NetworkService;
-import bisq.network.NetworkServiceConfig;
-import bisq.offer.OfferService;
-import bisq.presentation.notifications.SystemNotificationService;
 import bisq.security.SecurityService;
-import bisq.settings.DontShowAgainService;
-import bisq.settings.FavouriteMarketsService;
-import bisq.settings.SettingsService;
-import bisq.support.SupportService;
-import bisq.trade.TradeService;
-import bisq.updater.UpdaterService;
-import bisq.user.UserService;
-import bisq.wallets.core.BitcoinWalletSelection;
-import bisq.wallets.core.WalletService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import java.util.Optional;
+import java.security.Security;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -65,61 +40,50 @@ import static java.util.concurrent.CompletableFuture.supplyAsync;
  */
 
 @Slf4j
-public class DesktopApplicationService extends ApplicationService {
+public class AndroidApplicationService extends TempApplicationService {
     public static final long STARTUP_TIMEOUT_SEC = 300;
     public static final long SHUTDOWN_TIMEOUT_SEC = 10;
+    private static AndroidApplicationService INSTANCE;
 
-    @Getter
-    private final ServiceProvider serviceProvider;
     @Getter
     private final Observable<State> state = new Observable<>(State.INITIALIZE_APP);
     @Getter
     private final Observable<String> shutDownErrorMessage = new Observable<>();
     @Getter
     private final Observable<String> startupErrorMessage = new Observable<>();
-
+    @Getter
     private final SecurityService securityService;
-    private final Optional<WalletService> walletService;
-    private final NetworkService networkService;
-    private final IdentityService identityService;
-    private final BondedRolesService bondedRolesService;
-    private final AccountService accountService;
-    private final OfferService offerService;
-    private final ContractService contractService;
-    private final UserService userService;
-    private final ChatService chatService;
-    private final SettingsService settingsService;
-    private final SupportService supportService;
-    private final SystemNotificationService systemNotificationService;
-    private final TradeService tradeService;
-    private final UpdaterService updaterService;
-    private final BisqEasyService bisqEasyService;
-    private final AlertNotificationsService alertNotificationsService;
-    private final FavouriteMarketsService favouriteMarketsService;
-    private final DontShowAgainService dontShowAgainService;
-    private final WebcamAppService webcamAppService;
 
-    public DesktopApplicationService(String[] args, ShutDownHandler shutDownHandler) {
-        super("desktop", args);
+    public static AndroidApplicationService getInitializedInstance() {
+        if (INSTANCE == null) {
+            // Androids default BC version does not support all algorithms we need, thus we remove
+            // it and add our BC provider
+            Security.removeProvider("BC");
+            Security.addProvider(new BouncyCastleProvider());
+
+            AndroidApplicationService applicationService = new AndroidApplicationService(new String[]{}, new ShutDownHandler() {
+                @Override
+                public void shutdown() {
+                }
+
+                @Override
+                public void addShutDownHook(Runnable shutDownHandler) {
+                }
+            });
+            applicationService.readAllPersisted().join();
+            applicationService.initialize().join();
+            log.info("Application service initialized");
+            INSTANCE = applicationService;
+        }
+        return INSTANCE;
+    }
+
+    public AndroidApplicationService(String[] args, ShutDownHandler shutDownHandler) {
+        super("android", args);
 
         securityService = new SecurityService(persistenceService, SecurityService.Config.from(getConfig("security")));
-        com.typesafe.config.Config bitcoinWalletConfig = getConfig("bitcoinWallet");
-        BitcoinWalletSelection bitcoinWalletSelection = bitcoinWalletConfig.getEnum(BitcoinWalletSelection.class, "bitcoinWalletSelection");
-        //noinspection SwitchStatementWithTooFewBranches
-        switch (bitcoinWalletSelection) {
-           /* case BITCOIND:
-                walletService = Optional.of(new BitcoinWalletService(BitcoinWalletService.Config.from(bitcoinWalletConfig.getConfig("bitcoind")), getPersistenceService()));
-                break;
-            case ELECTRUM:
-                walletService = Optional.of(new ElectrumWalletService(ElectrumWalletService.Config.from(bitcoinWalletConfig.getConfig("electrum")), config.getBaseDir()));
-                break;*/
-            case NONE:
-            default:
-                walletService = Optional.empty();
-                break;
-        }
 
-        networkService = new NetworkService(NetworkServiceConfig.from(config.getBaseDir(),
+       /* networkService = new NetworkService(NetworkServiceConfig.from(config.getBaseDir(),
                 getConfig("network")),
                 persistenceService,
                 securityService.getKeyBundleService(),
@@ -188,58 +152,15 @@ public class DesktopApplicationService extends ApplicationService {
 
         favouriteMarketsService = new FavouriteMarketsService(settingsService);
 
-        dontShowAgainService = new DontShowAgainService(settingsService);
-        webcamAppService = new WebcamAppService(config);
-
-        // TODO (refactor, low prio): Not sure if ServiceProvider is still needed as we added BisqEasyService which exposes most of the services.
-        serviceProvider = new ServiceProvider(shutDownHandler,
-                getConfig(),
-                persistenceService,
-                securityService,
-                walletService,
-                networkService,
-                identityService,
-                bondedRolesService,
-                accountService,
-                offerService,
-                contractService,
-                userService,
-                chatService,
-                settingsService,
-                supportService,
-                systemNotificationService,
-                tradeService,
-                updaterService,
-                bisqEasyService,
-                alertNotificationsService,
-                favouriteMarketsService,
-                dontShowAgainService,
-                webcamAppService);
+        dontShowAgainService = new DontShowAgainService(settingsService);*/
     }
 
     @Override
     public CompletableFuture<Boolean> initialize() {
         return securityService.initialize()
-                .thenCompose(result -> {
+                /*.thenCompose(result -> {
                     setState(State.INITIALIZE_NETWORK);
-
-                    CompletableFuture<Boolean> networkFuture = networkService.initialize();
-                    CompletableFuture<Boolean> walletFuture = walletService.map(Service::initialize)
-                            .orElse(CompletableFuture.completedFuture(true));
-
-                    networkFuture.whenComplete((r, throwable) -> {
-                        if (throwable != null) {
-                            log.error("Error at networkFuture.initialize", throwable);
-                        } else if (!walletFuture.isDone()) {
-                            setState(State.INITIALIZE_WALLET);
-                        }
-                    });
-                    walletFuture.whenComplete((r, throwable) -> {
-                        if (throwable != null) {
-                            log.error("Error at walletService.initialize", throwable);
-                        }
-                    });
-                    return CompletableFutureUtils.allOf(walletFuture, networkFuture).thenApply(list -> true);
+                    return networkService.initialize();
                 })
                 .whenComplete((r, throwable) -> {
                     if (throwable == null) {
@@ -262,7 +183,7 @@ public class DesktopApplicationService extends ApplicationService {
                 .thenCompose(result -> alertNotificationsService.initialize())
                 .thenCompose(result -> favouriteMarketsService.initialize())
                 .thenCompose(result -> dontShowAgainService.initialize())
-                .thenCompose(result -> webcamAppService.initialize())
+                .thenCompose(result -> webcamAppService.initialize())*/
                 .orTimeout(STARTUP_TIMEOUT_SEC, TimeUnit.SECONDS)
                 .handle((result, throwable) -> {
                     if (throwable == null) {
@@ -289,27 +210,29 @@ public class DesktopApplicationService extends ApplicationService {
         // We shut down services in opposite order as they are initialized
         // In case a shutdown method completes exceptionally we log the error and map the result to `false` to not
         // interrupt the shutdown sequence.
-        return supplyAsync(() -> webcamAppService.shutdown().exceptionally(this::logError)
-                .thenCompose(result -> dontShowAgainService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> favouriteMarketsService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> alertNotificationsService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> bisqEasyService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> updaterService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> tradeService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> supportService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> systemNotificationService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> chatService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> offerService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> settingsService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> userService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> contractService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> accountService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> bondedRolesService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> identityService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> networkService.shutdown().exceptionally(this::logError))
-                .thenCompose(result -> walletService.map(service -> service.shutdown().exceptionally(this::logError))
-                        .orElse(CompletableFuture.completedFuture(true)))
-                .thenCompose(result -> securityService.shutdown().exceptionally(this::logError))
+        return supplyAsync(() -> securityService.shutdown().exceptionally(this::logError)
+
+                /* return supplyAsync(() -> webcamAppService.shutdown().exceptionally(this::logError)
+                         .thenCompose(result -> dontShowAgainService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> favouriteMarketsService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> alertNotificationsService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> bisqEasyService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> updaterService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> tradeService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> supportService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> systemNotificationService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> chatService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> offerService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> settingsService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> userService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> contractService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> accountService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> bondedRolesService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> identityService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> networkService.shutdown().exceptionally(this::logError))
+                         .thenCompose(result -> walletService.map(service -> service.shutdown().exceptionally(this::logError))
+                                 .orElse(CompletableFuture.completedFuture(true)))
+                         .thenCompose(result -> securityService.shutdown().exceptionally(this::logError))*/
                 .orTimeout(SHUTDOWN_TIMEOUT_SEC, TimeUnit.SECONDS)
                 .handle((result, throwable) -> {
                     if (throwable == null) {
