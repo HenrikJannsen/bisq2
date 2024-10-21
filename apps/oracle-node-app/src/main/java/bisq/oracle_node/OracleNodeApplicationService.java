@@ -42,7 +42,7 @@ public class OracleNodeApplicationService extends ApplicationService {
     private final BondedRolesService bondedRolesService;
 
     public OracleNodeApplicationService(String[] args) {
-        super("oracle_node", args);
+        super("oracle_node", args, PlatformUtils.getUserDataDir());
 
         securityService = new SecurityService(persistenceService, SecurityService.Config.from(getConfig("security")));
 

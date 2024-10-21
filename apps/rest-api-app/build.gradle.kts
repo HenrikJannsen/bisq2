@@ -25,6 +25,7 @@ dependencies {
     implementation("bisq:presentation")
     implementation("bisq:bisq-easy")
     implementation("bisq:application")
+    implementation("bisq:updater")
 
     implementation("network:network-common")
     implementation("network:network")

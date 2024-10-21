@@ -51,6 +51,7 @@ dependencies {
     implementation("bisq:presentation")
     implementation("bisq:bisq-easy")
     implementation("bisq:application")
+    implementation("bisq:updater")
 
     implementation(project(":desktop"))
 

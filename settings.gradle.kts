@@ -22,7 +22,6 @@ toolchainManagement {
 rootProject.name = "bisq"
 
 include("account")
-include("android")
 include("application")
 include("bisq-easy")
 include("bonded-roles")
@@ -41,6 +40,7 @@ include("trade")
 include("security")
 include("settings")
 include("support")
+include("updater")
 include("user")
 
 includeBuild("apps")

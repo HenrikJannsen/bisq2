@@ -39,6 +39,7 @@ dependencies {
     implementation("bisq:common")
     implementation("bisq:security")
     implementation("bisq:application")
+    implementation("bisq:updater")
 
     implementation(project(":desktop-app"))
 }
