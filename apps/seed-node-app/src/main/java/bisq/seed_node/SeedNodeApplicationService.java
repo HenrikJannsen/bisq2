@@ -19,7 +19,9 @@ package bisq.seed_node;
 
 import bisq.application.ApplicationService;
 import bisq.bonded_roles.BondedRolesService;
+import bisq.common.platform.PlatformUtils;
 import bisq.identity.IdentityService;
+import bisq.internal.common.platform.JvmMemoryReport;
 import bisq.network.NetworkService;
 import bisq.network.NetworkServiceConfig;
 import bisq.security.SecurityService;

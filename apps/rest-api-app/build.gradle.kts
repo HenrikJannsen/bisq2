@@ -8,6 +8,7 @@ application {
 }
 
 dependencies {
+    implementation("bisq:common")
     implementation("bisq:internal")
     implementation("bisq:persistence")
     implementation("bisq:i18n")
