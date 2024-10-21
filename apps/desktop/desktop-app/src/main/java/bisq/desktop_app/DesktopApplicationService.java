@@ -31,7 +31,7 @@ import bisq.common.util.CompletableFutureUtils;
 import bisq.common.util.ExceptionUtil;
 import bisq.contract.ContractService;
 import bisq.desktop.ServiceProvider;
-import bisq.desktop.State;
+import bisq.application.State;
 import bisq.desktop.webcam.WebcamAppService;
 import bisq.identity.IdentityService;
 import bisq.internal.common.platform.JvmMemoryReport;

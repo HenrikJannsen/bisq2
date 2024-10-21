@@ -19,7 +19,7 @@ publishing {
 }
 
 dependencies {
-    implementation(project(":internal"))
+    implementation(project(":common"))
     implementation(project(":i18n"))
     implementation(project(":persistence"))
     implementation(project(":security"))
@@ -34,5 +34,4 @@ dependencies {
     implementation("network:network")
 
     implementation(libs.typesafe.config)
-    implementation(libs.bouncycastle.pg)
 }
