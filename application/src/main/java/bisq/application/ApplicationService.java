@@ -20,6 +20,7 @@ package bisq.application;
 import bisq.common.application.*;
 import bisq.common.currency.FiatCurrencyRepository;
 import bisq.common.file.FileUtils;
+import bisq.common.jvm.MemoryReport;
 import bisq.common.locale.CountryRepository;
 import bisq.common.locale.LanguageRepository;
 import bisq.common.locale.LocaleRepository;
@@ -27,7 +28,6 @@ import bisq.common.logging.AsciiLogo;
 import bisq.common.logging.LogSetup;
 import bisq.common.util.ExceptionUtil;
 import bisq.i18n.Res;
-import bisq.internal.common.platform.MemoryReport;
 import bisq.persistence.PersistenceService;
 import com.typesafe.config.ConfigFactory;
 import lombok.EqualsAndHashCode;
@@ -124,7 +124,8 @@ public abstract class ApplicationService implements Service {
     private final MemoryReport memoryReport;
     private FileLock instanceLock;
 
-    public ApplicationService(String configFileName, String[] args, Path userDataDir) {
+    public ApplicationService(String configFileName, String[] args, Path userDataDir, MemoryReport memoryReport) {
+        this.memoryReport = memoryReport;
         com.typesafe.config.Config defaultTypesafeConfig = ConfigFactory.load(configFileName);
         defaultTypesafeConfig.checkValid(ConfigFactory.defaultReference(), configFileName);
 
@@ -167,7 +168,6 @@ public abstract class ApplicationService implements Service {
             log.info("Using custom config file");
         }
 
-        memoryReport = MemoryReport.getINSTANCE();
         memoryReport.printPeriodically(config.getMemoryReportIntervalSec(), config.isIncludeThreadListInMemoryReport());
 
         DevMode.setDevMode(config.isDevMode());

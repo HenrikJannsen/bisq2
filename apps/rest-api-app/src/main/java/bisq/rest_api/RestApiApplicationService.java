@@ -86,7 +86,7 @@ public class RestApiApplicationService extends ApplicationService {
     private final Observable<State> state = new Observable<>(State.INITIALIZE_APP);
 
     public RestApiApplicationService(String[] args) {
-        super("rest_api", args, PlatformUtils.getUserDataDir());
+        super("rest_api", args, PlatformUtils.getUserDataDir(), JvmMemoryReport.getINSTANCE());
         securityService = new SecurityService(persistenceService, SecurityService.Config.from(getConfig("security")));
         com.typesafe.config.Config bitcoinWalletConfig = getConfig("bitcoinWallet");
         BitcoinWalletSelection bitcoinWalletSelection = bitcoinWalletConfig.getEnum(BitcoinWalletSelection.class, "bitcoinWalletSelection");

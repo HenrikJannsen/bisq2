@@ -49,7 +49,7 @@ public class SeedNodeApplicationService extends ApplicationService {
     private final BondedRolesService bondedRolesService;
 
     public SeedNodeApplicationService(String[] args) {
-        super("seed_node", args, PlatformUtils.getUserDataDir());
+        super("seed_node", args, PlatformUtils.getUserDataDir(), JvmMemoryReport.getINSTANCE());
 
         securityService = new SecurityService(persistenceService, SecurityService.Config.from(getConfig("security")));
 

@@ -19,12 +19,12 @@ package bisq.desktop_app;
 
 import bisq.account.AccountService;
 import bisq.application.ApplicationService;
-import bisq.common.application.ShutDownHandler;
 import bisq.bisq_easy.BisqEasyService;
 import bisq.bonded_roles.BondedRolesService;
 import bisq.bonded_roles.security_manager.alert.AlertNotificationsService;
 import bisq.chat.ChatService;
 import bisq.common.application.Service;
+import bisq.common.application.ShutDownHandler;
 import bisq.common.observable.Observable;
 import bisq.common.platform.PlatformUtils;
 import bisq.common.util.CompletableFutureUtils;
@@ -34,6 +34,7 @@ import bisq.desktop.ServiceProvider;
 import bisq.desktop.State;
 import bisq.desktop.webcam.WebcamAppService;
 import bisq.identity.IdentityService;
+import bisq.internal.common.platform.JvmMemoryReport;
 import bisq.network.NetworkService;
 import bisq.network.NetworkServiceConfig;
 import bisq.offer.OfferService;
@@ -101,7 +102,7 @@ public class DesktopApplicationService extends ApplicationService {
     private final WebcamAppService webcamAppService;
 
     public DesktopApplicationService(String[] args, ShutDownHandler shutDownHandler) {
-        super("desktop", args, PlatformUtils.getUserDataDir());
+        super("desktop", args, PlatformUtils.getUserDataDir(), JvmMemoryReport.getINSTANCE());
 
         securityService = new SecurityService(persistenceService, SecurityService.Config.from(getConfig("security")));
         com.typesafe.config.Config bitcoinWalletConfig = getConfig("bitcoinWallet");
