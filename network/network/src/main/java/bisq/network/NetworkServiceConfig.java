@@ -18,7 +18,9 @@
 package bisq.network;
 
 import bisq.common.application.ConfigUtil;
+import bisq.common.facades.FacadeProvider;
 import bisq.common.network.Address;
+import bisq.common.network.ClearNetLANLocalAddressFacade;
 import bisq.common.network.TransportConfig;
 import bisq.common.network.TransportType;
 import bisq.network.p2p.ServiceNode;
@@ -48,6 +50,11 @@ public final class NetworkServiceConfig {
         InventoryService.Config inventoryServiceConfig = InventoryService.Config.from(config.getConfig("inventory"));
         AuthorizationService.Config authorizationServiceConfig = AuthorizationService.Config.from(config.getConfig("authorization"));
         Config seedConfig = config.getConfig("seedAddressByTransportType");
+        if (config.hasPath("useClearNetLocalAddressFacade") &&
+                config.getBoolean("useClearNetLocalAddressFacade")) {
+            System.out.println("Using ClearNetLANLocalAddressFacade");
+            FacadeProvider.setLocalhostFacade(new ClearNetLANLocalAddressFacade());
+        }
         // Only read seed addresses for explicitly supported address types
         Set<TransportType> supportedTransportTypes = new HashSet<>(config.getEnumList(TransportType.class, "supportedTransportTypes"));
         Map<TransportType, Set<Address>> seedAddressesByTransport = supportedTransportTypes.stream()
