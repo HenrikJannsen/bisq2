@@ -25,13 +25,11 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.nio.channels.spi.SelectorProvider;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -80,14 +78,23 @@ public class ServerChannel {
         serverThread = new Thread(() -> {
             Thread.currentThread().setName("ServerChannel.start");
             try {
-                InetSocketAddress socketAddress = new InetSocketAddress(
+              /*  InetSocketAddress socketAddress = new InetSocketAddress(
                         InetAddress.getLocalHost(),
                         myAddress.getPort()
-                );
-                serverSocketChannel.socket().bind(socketAddress);
+                );*/
+                //pre java 1.7 version
+                //serverSocketChannel.socket().bind(socketAddress);
 
-                Selector selector = SelectorProvider.provider().openSelector();
-                InboundConnectionsManager inboundConnectionsManager =
+                serverSocketChannel.bind(new InetSocketAddress(myAddress.getPort()));
+                serverSocketChannel.configureBlocking(false);
+
+                Selector selector = Selector.open();
+                //Selector selector = SelectorProvider.provider().openSelector();
+
+                serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+
+
+                 InboundConnectionsManager inboundConnectionsManager =
                         new InboundConnectionsManager(
                                 banList,
                                 myCapability,
@@ -99,7 +106,7 @@ public class ServerChannel {
                         );
                 this.inboundConnectionsManager = Optional.of(inboundConnectionsManager);
 
-                inboundConnectionsManager.registerOpAccept();
+                //inboundConnectionsManager.registerOpAccept();
                 onServerReadyListener.ifPresent(Handler::onServerReady);
 
                 while (selector.select() > 0) {

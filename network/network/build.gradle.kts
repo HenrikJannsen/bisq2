@@ -23,4 +23,15 @@ dependencies {
     implementation(libs.chimp.jsocks)
 
     integrationTestImplementation(libs.mockito)
+
+    implementation("io.netty:netty-transport:4.2.4.Final")
+    implementation("io.netty:netty-buffer:4.2.4.Final")
+    implementation("io.netty:netty-common:4.2.4.Final")
+    implementation("io.netty:netty-handler:4.2.4.Final")
+    implementation("io.netty:netty-handler:4.2.4.Final")
+    implementation("io.netty:netty-handler-proxy:4.2.4.Final")
+
+    // SOCKS protocol support
+    implementation("io.netty:netty-codec-socks:4.2.4.Final")
+    //implementation("io.grpc:grpc-netty-shaded:1.74.0")
 }
