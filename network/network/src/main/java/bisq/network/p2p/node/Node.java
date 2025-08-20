@@ -47,7 +47,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -235,13 +234,12 @@ public class Node implements Connection.Handler {
                 Bootstrap bootstrap = new Bootstrap();
                 bootstrap.group(group)
                         .channel(NioSocketChannel.class)
-                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
+                        //.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
                         .handler(new ChannelInitializer<SocketChannel>() {
                             @Override
-                            protected void initChannel(SocketChannel ch) {
-                                ChannelPipeline pipeline = ch.pipeline();
+                            protected void initChannel(SocketChannel socketChannel) {
+                                ChannelPipeline pipeline = socketChannel.pipeline();
 
-                                // SOCKS5 proxy handler (non-blocking)
                                 Socks5ProxyHandler socks5ProxyHandler = new Socks5ProxyHandler(new InetSocketAddress(proxyHost, proxyPort));
                                 pipeline.addFirst(socks5ProxyHandler);
 
@@ -276,8 +274,8 @@ public class Node implements Connection.Handler {
                         });
 
                 // Connect to target via proxy
-                ChannelFuture f = bootstrap.connect(targetHost, targetPort).sync();
-                f.channel().closeFuture().sync();
+                ChannelFuture channelFuture = bootstrap.connect(targetHost, targetPort).sync();
+                channelFuture.channel().closeFuture().sync();
 
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
