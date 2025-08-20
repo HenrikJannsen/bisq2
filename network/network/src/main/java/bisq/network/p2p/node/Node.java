@@ -593,8 +593,8 @@ public class Node implements Connection.Handler {
                         connectionThrottle,
                         Node.this,
                         Node.this::handleConnectionException);
-                outboundConnectionsByAddress.put(peersAddress, connection);
-                future.complete(connection);*/
+                outboundConnectionsByAddress.put(peersAddress, connection);*/
+              //  future.complete(connection);
             }
 
             @Override

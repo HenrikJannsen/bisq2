@@ -102,7 +102,6 @@ public class OutboundHandshakeHandler extends HandshakeHandler {
 
     @Override
     protected void channelRead0(ChannelHandlerContext context, bisq.network.protobuf.NetworkEnvelope proto) {
-        log.error("read: proto={}", proto);
         if (peerAddress == null) {
             log.error("peerAddress is expected to be not null.");
             return;
@@ -152,7 +151,7 @@ public class OutboundHandshakeHandler extends HandshakeHandler {
             log.debug("Peers capability {}, load={}", peersCapability, peersNetworkLoad);
             handler.onHandshakeCompleted(context, new Result(peersCapability, peersNetworkLoad, connectionMetrics, connectionId));
 
-            //  context.pipeline().remove(this);
+              context.pipeline().remove(this);
         } catch (Exception exception) {
             if (exception instanceof ConnectionException connectionException) {
                 throw connectionException;

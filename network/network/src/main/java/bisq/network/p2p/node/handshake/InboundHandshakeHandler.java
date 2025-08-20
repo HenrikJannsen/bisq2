@@ -65,7 +65,6 @@ public class InboundHandshakeHandler extends HandshakeHandler {
 
     @Override
     protected void channelRead0(ChannelHandlerContext context, bisq.network.protobuf.NetworkEnvelope proto) {
-        log.error("read: proto={}", proto);
         try {
             if (proto == null) {
                 throw new ConnectionException(PROTOBUF_IS_NULL, "NetworkEnvelope protobuf is null");
@@ -130,7 +129,7 @@ public class InboundHandshakeHandler extends HandshakeHandler {
             connectionMetrics.addRtt(System.currentTimeMillis() - ts);
             handler.onHandshakeCompleted(context, new Result(requestersCapability, peersNetworkLoad, connectionMetrics, connectionId));
 
-            // context.pipeline().remove(this);
+            context.pipeline().remove(this);
         } catch (Exception exception) {
             if (exception instanceof ConnectionException connectionException) {
                 throw connectionException;
