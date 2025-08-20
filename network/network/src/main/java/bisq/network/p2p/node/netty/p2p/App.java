@@ -19,7 +19,7 @@ package bisq.network.p2p.node.netty.p2p;
 
 
 import bisq.common.network.Address;
-import bisq.network.p2p.node.netty.p2p.node.Node;
+import bisq.network.p2p.node.netty.p2p.node.NettyNode;
 import bisq.network.p2p.node.netty.p2p.transport.clearnet.NettyTcpTransportService;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,7 +40,7 @@ public class App {
         NettyTcpTransportService transportService = new NettyTcpTransportService();
 
         // 2. Create the node
-        Node node = new Node(transportService, myPort);
+        NettyNode node = new NettyNode(transportService, myPort);
 
         // 3. Start node server
         node.start(); // blocking

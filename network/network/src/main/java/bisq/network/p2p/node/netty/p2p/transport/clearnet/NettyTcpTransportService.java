@@ -18,15 +18,14 @@
 package bisq.network.p2p.node.netty.p2p.transport.clearnet;
 
 import bisq.common.network.Address;
+import bisq.network.p2p.node.handshake.InboundHandshakeHandler;
+import bisq.network.p2p.node.handshake.OutboundHandshakeHandler;
 import bisq.network.p2p.node.netty.p2p.conn.Connection;
 import bisq.network.p2p.node.netty.p2p.conn.ConnectionHandler;
 import bisq.network.p2p.node.netty.p2p.conn.NettyOutboundConnection;
 import bisq.network.p2p.node.netty.p2p.core.RawChannel;
 import bisq.network.p2p.node.netty.p2p.core.RemoteAddress;
-import bisq.network.p2p.node.netty.p2p.handshake.InboundHandshakeHandler;
-import bisq.network.p2p.node.netty.p2p.handshake.OutboundHandshakeHandler;
 import bisq.network.p2p.node.netty.p2p.transport.TransportService;
-import bisq.network.protobuf.Envelope;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -38,7 +37,6 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.protobuf.ProtobufDecoder;
 import io.netty.handler.codec.protobuf.ProtobufEncoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
@@ -64,7 +62,7 @@ public class NettyTcpTransportService implements TransportService {
                     protected void initChannel(NioSocketChannel channel) {
                         channel.pipeline()
                                 .addLast(new ProtobufVarint32FrameDecoder())
-                                .addLast(new ProtobufDecoder(Envelope.getDefaultInstance()))
+                                //.addLast(new ProtobufDecoder(Envelope.getDefaultInstance()))
                                 .addLast(new ProtobufVarint32LengthFieldPrepender())
                                 .addLast(new ProtobufEncoder())
                                 .addLast(handshakeHandler);
@@ -93,7 +91,7 @@ public class NettyTcpTransportService implements TransportService {
                     protected void initChannel(SocketChannel ch) {
                         ch.pipeline()
                                 .addLast(new ProtobufVarint32FrameDecoder())
-                                .addLast(new ProtobufDecoder(Envelope.getDefaultInstance()))
+                              //  .addLast(new ProtobufDecoder(Envelope.getDefaultInstance()))
                                 .addLast(new ProtobufVarint32LengthFieldPrepender())
                                 .addLast(new ProtobufEncoder())
                                 .addLast(handshakeHandler);

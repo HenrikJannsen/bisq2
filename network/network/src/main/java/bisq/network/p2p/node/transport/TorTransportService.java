@@ -65,14 +65,27 @@ public class TorTransportService implements TransportService {
     }
 
     @Override
+    public CompletableFuture<Address> evaluateMyAddress(NetworkId networkId, KeyBundle keyBundle) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                int port = networkId.getAddressByTransportTypeMap().get(TransportType.TOR).getPort();
+                TorKeyPair torKeyPair = keyBundle.getTorKeyPair();
+                String onionAddress = torKeyPair.getOnionAddress();
+                return new Address(onionAddress, port);
+            } catch (Exception exception) {
+                throw new ConnectionException(exception);
+            }
+        });
+    }
+
+    @Override
     public ServerSocketResult getServerSocket(NetworkId networkId, KeyBundle keyBundle) {
         try {
             int port = networkId.getAddressByTransportTypeMap().get(TransportType.TOR).getPort();
             initializeServerSocketTimestampByNetworkId.put(networkId, System.currentTimeMillis());
 
             TorKeyPair torKeyPair = keyBundle.getTorKeyPair();
-            String onionAddress = torKeyPair.getOnionAddress();
-            Address address = new Address(onionAddress, port);
+            Address address = evaluateMyAddress(networkId, keyBundle).get();
             ServerSocket serverSocket = torService.publishOnionService(port, torKeyPair).get();
             initializedServerSocketTimestampByNetworkId.put(networkId, System.currentTimeMillis());
             return new ServerSocketResult(serverSocket, address);

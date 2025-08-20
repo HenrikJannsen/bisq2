@@ -23,13 +23,17 @@ import bisq.common.network.TransportType;
 import bisq.common.observable.Observable;
 import bisq.common.observable.map.ObservableHashMap;
 import bisq.network.identity.NetworkId;
+import bisq.network.p2p.node.handshake.InboundHandshakeHandler;
+import bisq.network.p2p.node.handshake.OutboundHandshakeHandler;
 import bisq.security.keys.KeyBundle;
 import com.runjva.sourceforge.jsocks.protocol.Socks5Proxy;
+import io.netty.channel.Channel;
 
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -54,12 +58,27 @@ public interface TransportService {
 
     CompletableFuture<Boolean> shutdown();
 
+    default CompletableFuture<Address> createNettyServer(NetworkId networkId,
+                                                         KeyBundle keyBundle) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    default CompletableFuture<Address> startNettyServer(NetworkId networkId,
+                                                        KeyBundle keyBundle,
+                                                        Supplier<InboundHandshakeHandler> handshakeHandler) {
+        return CompletableFuture.completedFuture(null);
+    }
+
     ServerSocketResult getServerSocket(NetworkId networkId, KeyBundle keyBundle);
 
     Socket getSocket(Address address) throws IOException;
 
     default Optional<Socks5Proxy> getSocksProxy() throws IOException {
         return Optional.empty();
+    }
+
+    default CompletableFuture<Channel> connect(Address address, OutboundHandshakeHandler handshakeHandler) {
+        return null;
     }
 
     CompletableFuture<Boolean> isPeerOnlineAsync(Address address);
@@ -81,4 +100,6 @@ public interface TransportService {
     ObservableHashMap<NetworkId, Long> getInitializeServerSocketTimestampByNetworkId();
 
     ObservableHashMap<NetworkId, Long> getInitializedServerSocketTimestampByNetworkId();
+
+    CompletableFuture<Address> evaluateMyAddress(NetworkId networkId, KeyBundle keyBundle);
 }

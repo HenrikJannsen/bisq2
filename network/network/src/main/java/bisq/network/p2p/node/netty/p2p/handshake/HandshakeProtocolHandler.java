@@ -19,9 +19,6 @@ package bisq.network.p2p.node.netty.p2p.handshake;
 
 import bisq.network.p2p.node.netty.p2p.conn.Connection;
 import bisq.network.p2p.node.netty.p2p.conn.NettyInboundConnection;
-import bisq.network.p2p.node.netty.p2p.conn.NettyOutboundConnection;
-import bisq.network.protobuf.Envelope;
-import bisq.network.protobuf.Handshake;
 import com.google.protobuf.Message;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -48,17 +45,17 @@ public class HandshakeProtocolHandler extends SimpleChannelInboundHandler<Messag
     public void channelActive(ChannelHandlerContext ctx) {
         // Send handshake request
         if (!isInbound) {
-            bisq.network.protobuf.Handshake.Request request = bisq.network.protobuf.Handshake.Request.newBuilder().setVersion(1).build();
+           /* bisq.network.protobuf.Handshake.Request request = bisq.network.protobuf.Handshake.Request.newBuilder().setVersion(1).build();
             Envelope env = Envelope.newBuilder()
                     .setHandshakeRequest(request)
                     .build();
-            ctx.writeAndFlush(env);
+            ctx.writeAndFlush(env);*/
         }
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Message msg) {
-        if (msg instanceof bisq.network.protobuf.Envelope envelope) {
+        /*if (msg instanceof bisq.network.protobuf.Envelope envelope) {
             envelope.getHandshakeRequest();
             if (envelope.hasHandshakeRequest()) {
                 Handshake.Request request = envelope.getHandshakeRequest();
@@ -73,7 +70,7 @@ public class HandshakeProtocolHandler extends SimpleChannelInboundHandler<Messag
                 bisq.network.protobuf.Handshake.Response response = envelope.getHandshakeResponse();
                 handler.onNewConnection(new NettyOutboundConnection(ctx.channel()));
             }
-        }
+        }*/
     }
 
     @Override

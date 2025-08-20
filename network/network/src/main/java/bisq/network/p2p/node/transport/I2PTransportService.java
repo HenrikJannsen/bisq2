@@ -197,6 +197,19 @@ public class I2PTransportService implements TransportService {
                 isEmbeddedRouter);
     }
 
+    @Override
+    public CompletableFuture<Address> evaluateMyAddress(NetworkId networkId, KeyBundle keyBundle) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                int port = networkId.getAddressByTransportTypeMap().get(TransportType.I2P).getPort();
+                String destination = i2pClient.getMyDestination(sessionId);
+                // Port is irrelevant for I2P
+                return new Address(destination, port);
+            } catch (Exception exception) {
+                throw new ConnectionException(exception);
+            }
+        });
+    }
 
     @Override
     public ServerSocketResult getServerSocket(NetworkId networkId, KeyBundle keyBundle) {
@@ -212,13 +225,11 @@ public class I2PTransportService implements TransportService {
                 i2pPort = config.getI2cpPort();
             }
             ServerSocket serverSocket = i2pClient.getServerSocket(sessionId, config.getI2cpHost(), i2pPort);
-            String destination = i2pClient.getMyDestination(sessionId);
-            // Port is irrelevant for I2P
-            Address address = new Address(destination, port);
+            Address address = evaluateMyAddress(networkId, keyBundle).get();
 
             initializedServerSocketTimestampByNetworkId.put(networkId, System.currentTimeMillis());
 
-            log.debug("ServerSocket created. SessionId={}, destination={}", sessionId, destination);
+            log.debug("ServerSocket created. SessionId={}, destination={}", sessionId, address.getHost());
             return new ServerSocketResult(serverSocket, address);
         } catch (Exception exception) {
             throw new ConnectionException(exception);

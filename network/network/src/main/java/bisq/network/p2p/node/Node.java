@@ -35,6 +35,10 @@ import bisq.network.p2p.message.EnvelopePayloadMessage;
 import bisq.network.p2p.node.authorization.AuthorizationService;
 import bisq.network.p2p.node.authorization.AuthorizationToken;
 import bisq.network.p2p.node.handshake.ConnectionHandshake;
+import bisq.network.p2p.node.handshake.HandshakeHandler;
+import bisq.network.p2p.node.handshake.InboundHandshakeHandler;
+import bisq.network.p2p.node.handshake.OutboundHandshakeHandler;
+import bisq.network.p2p.node.network_load.NetworkLoad;
 import bisq.network.p2p.node.network_load.NetworkLoadSnapshot;
 import bisq.network.p2p.node.transport.ServerSocketResult;
 import bisq.network.p2p.node.transport.TransportService;
@@ -42,6 +46,8 @@ import bisq.network.p2p.services.peer_group.BanList;
 import bisq.security.keys.KeyBundle;
 import bisq.security.keys.KeyBundleService;
 import com.runjva.sourceforge.jsocks.protocol.Socks5Proxy;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -258,6 +264,37 @@ public class Node implements Connection.Handler {
     }
 
     private void createServerAndListen() {
+        if (myCapability.isEmpty()) {
+            Address myAddress = transportService.evaluateMyAddress(networkId, keyBundle).join();
+            myCapability = Optional.of(Capability.myCapability(myAddress, new ArrayList<>(supportedTransportTypes), new ArrayList<>(features)));
+        }
+
+        transportService.startNettyServer(networkId,
+                        keyBundle,
+                        () -> new InboundHandshakeHandler(authorizationService,
+                                banList,
+                                myCapability.get(),
+                                networkLoadSnapshot.getCurrentNetworkLoad(),
+                                keyBundle,
+                                new HandshakeHandler.Handler() {
+                                    @Override
+                                    public void onHandshakeCompleted(ChannelHandlerContext context,
+                                                                     HandshakeHandler.Result result) {
+                                        log.error("onHandshakeCompleted {}", result);
+                                        //todo create InboundConnection
+                                    }
+
+                                    @Override
+                                    public void onClosed(Channel channel) {
+                                        log.error("onClosed {}", channel);
+                                    }
+                                }))
+                .whenComplete(((address, throwable) -> {
+                    log.error("Server started: address {}", address);
+                }));
+    }
+
+    private void createServerAndListenOld() {
         ServerSocketResult serverSocketResult = transportService.getServerSocket(networkId, keyBundle); // blocking
         myCapability = Optional.of(Capability.myCapability(serverSocketResult.getAddress(), new ArrayList<>(supportedTransportTypes), new ArrayList<>(features)));
         server = Optional.of(new Server(serverSocketResult,
@@ -324,7 +361,7 @@ public class Node implements Connection.Handler {
                 result.getConnectionMetrics(),
                 connectionThrottle,
                 this,
-                this::handleException);
+                this::handleConnectionException);
     }
 
 
@@ -348,7 +385,7 @@ public class Node implements Connection.Handler {
                     .handle((con, exception) -> {
                         if (exception != null) {
                             if (connection.isRunning() && !(exception.getCause() instanceof SocketException)) {
-                                handleException(connection, exception);
+                                handleConnectionException(connection, exception);
                                 log.debug("Send message failed", exception);
                                 closeConnection(connection, CloseReason.EXCEPTION.exception(exception));
                             }
@@ -446,36 +483,39 @@ public class Node implements Connection.Handler {
             throw new ConnectionException(ADDRESS_BANNED, "PeerAddress is banned. address=" + address);
         }
 
-        Socket socket = createSocket(address); // Blocking call
+        //Socket socket = createSocket(address); // Blocking call
 
         // As time passed we check again if connection is still not available
-        Optional<OutboundConnection> outboundConnection = findOutboundConnectionAndCloseSocketIfPresent(address, socket);
+      /*  Optional<OutboundConnection> outboundConnection = findOutboundConnectionAndCloseSocketIfPresent(address, socket);
         if (outboundConnection.isPresent()) {
             return outboundConnection.get();
-        }
+        }*/
 
         try {
-            ConnectionHandshake.Result result = startConnectionHandshake(address, socket, myCapability); // Blocking call
-            log.debug("Create new outbound connection to {}", address);
+            log.error("Create new outbound connection to {}", address);
+            return startConnectionHandshake(address, myCapability)
+                    .whenComplete((connection, throwable) -> {
+                        log.error("Outbound connection to {} created", address);
+                    }).join();
 
             // As time passed we check again if connection is still not available
-            outboundConnection = findOutboundConnectionAndCloseSocketIfPresent(address, socket);
+           /* outboundConnection = findOutboundConnectionAndCloseSocketIfPresent(address, socket);
             if (outboundConnection.isPresent()) {
                 return outboundConnection.get();
-            }
+            }*/
 
-            if (!isDefaultNode) {
+          /*  if (!isDefaultNode) {
                 log.info("We create an outbound connection to {} from a user node. node={}", address, getNodeInfo());
-            }
+            }*/
 
-            return createNewOutboundConnection(address, socket, result);
+            //return createNewOutboundConnection(address, socket, result);
         } catch (Throwable throwable) {
-            if (socket != null) {
+           /* if (socket != null) {
                 try {
                     socket.close();
                 } catch (IOException ignore) {
                 }
-            }
+            }*/
             handleException(throwable);
             throw new ConnectionException(throwable);
         }
@@ -492,7 +532,7 @@ public class Node implements Connection.Handler {
 
     private OutboundConnection createNewOutboundConnection(Address address,
                                                            Socket socket,
-                                                           ConnectionHandshake.Result result) {
+                                                           HandshakeHandler.Result result) {
         OutboundConnection connection = null;
         try {
             NetworkLoadSnapshot peersNetworkLoadSnapshot = new NetworkLoadSnapshot(result.getPeersNetworkLoad());
@@ -506,7 +546,7 @@ public class Node implements Connection.Handler {
                     result.getConnectionMetrics(),
                     connectionThrottle,
                     this,
-                    this::handleException);
+                    this::handleConnectionException);
             outboundConnectionsByAddress.put(address, connection);
 
             OutboundConnection finalConnection = connection;
@@ -527,9 +567,62 @@ public class Node implements Connection.Handler {
         }
     }
 
-    private ConnectionHandshake.Result startConnectionHandshake(Address address,
-                                                                Socket socket,
-                                                                Capability myCapability) {
+    private CompletableFuture<OutboundConnection> startConnectionHandshake(Address peersAddress,
+                                                                           Capability myCapability) {
+        CompletableFuture<OutboundConnection> future = new CompletableFuture<>();
+        HandshakeHandler.Handler handler = new HandshakeHandler.Handler() {
+            /*@Override
+            public void onHandshakeCompleted(Channel channel) {
+                // log.error("Server.onHandshakeCompleted {} {}", new Address("127.0.0.1", port), channel);
+                // inboundConnectionsByAddress.put(new Address("127.0.0.1", port), new NettyInboundConnection(channel));
+            }*/
+
+            @Override
+            public void onHandshakeCompleted(ChannelHandlerContext context, HandshakeHandler.Result result) {
+                log.error("onHandshakeCompleted {}", result);
+                Address peersAddress = result.getPeersCapability().getAddress();
+                NetworkLoadSnapshot peersNetworkLoadSnapshot = new NetworkLoadSnapshot(result.getPeersNetworkLoad());
+                ConnectionThrottle connectionThrottle = new ConnectionThrottle(peersNetworkLoadSnapshot, networkLoadSnapshot, config);
+              /*  OutboundConnection connection = new OutboundConnection(authorizationService,
+                        result.getConnectionId(),
+                        new Socket(),
+                        peersAddress,
+                        result.getPeersCapability(),
+                        peersNetworkLoadSnapshot,
+                        result.getConnectionMetrics(),
+                        connectionThrottle,
+                        Node.this,
+                        Node.this::handleConnectionException);
+                outboundConnectionsByAddress.put(peersAddress, connection);
+                future.complete(connection);*/
+            }
+
+            @Override
+            public void onClosed(Channel channel) {
+                log.error("onClosed {}", channel);
+            }
+        };
+        NetworkLoad myNetworkLoad = networkLoadSnapshot.getCurrentNetworkLoad();
+        OutboundHandshakeHandler handshakeHandler = new OutboundHandshakeHandler(authorizationService,
+                banList,
+                myCapability,
+                myNetworkLoad,
+                keyBundle,
+                peersAddress,
+                handler);
+        transportService.connect(peersAddress, handshakeHandler)
+                .whenComplete((channel, throwable) -> {
+                    if (throwable == null && channel != null) {
+                        log.error("Connection to {} established", peersAddress);
+                    }
+                });
+
+        return future;
+    }
+
+    private ConnectionHandshake.Result startConnectionHandshakeOld(Address address,
+                                                                   Socket socket,
+                                                                   Capability myCapability) {
         ConnectionHandshake connectionHandshake = null;
         try {
             connectionHandshake = new ConnectionHandshake(socket,
@@ -778,7 +871,7 @@ public class Node implements Connection.Handler {
     // Private
     /* --------------------------------------------------------------------- */
 
-    private void handleException(Connection connection, Throwable exception) {
+    private void handleConnectionException(Connection connection, Throwable exception) {
         log.debug("Got called handleException. connection={}, exception={}", connection, exception.getMessage());
         if (isShutdown()) {
             return;
