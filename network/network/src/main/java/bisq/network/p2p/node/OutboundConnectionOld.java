@@ -21,31 +21,31 @@ import bisq.common.network.Address;
 import bisq.network.p2p.node.authorization.AuthorizationService;
 import bisq.network.p2p.node.network_load.ConnectionMetrics;
 import bisq.network.p2p.node.network_load.NetworkLoadSnapshot;
-import io.netty.channel.ChannelHandlerContext;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.Socket;
 import java.util.function.BiConsumer;
 
 @Slf4j
-public class OutboundConnection extends Connection {
+public class OutboundConnectionOld extends ConnectionOld {
 
     @Getter
     private final Address address;
 
-    OutboundConnection(AuthorizationService authorizationService,
-                       ChannelHandlerContext context,
-                       String connectionId,
-                       Address address,
-                       Capability peersCapability,
-                       NetworkLoadSnapshot peersNetworkLoadSnapshot,
-                       ConnectionMetrics connectionMetrics,
-                       ConnectionThrottle connectionThrottle,
-                       Handler handler,
-                       BiConsumer<Connection, Exception> errorHandler) {
+    OutboundConnectionOld(AuthorizationService authorizationService,
+                          String connectionId,
+                          Socket socket,
+                          Address address,
+                          Capability peersCapability,
+                          NetworkLoadSnapshot peersNetworkLoadSnapshot,
+                          ConnectionMetrics connectionMetrics,
+                          ConnectionThrottle connectionThrottle,
+                          Handler handler,
+                          BiConsumer<ConnectionOld, Exception> errorHandler) {
         super(authorizationService,
-                context,
                 connectionId,
+                socket,
                 peersCapability,
                 peersNetworkLoadSnapshot,
                 connectionMetrics,

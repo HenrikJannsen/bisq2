@@ -165,7 +165,6 @@ public class ClearNetTransportService implements TransportService {
                     @Override
                     protected void initChannel(NioSocketChannel channel) {
                         InboundHandshakeHandler inboundHandshakeHandler = handshakeHandler.get();
-                        log.error("inboundHandshakeHandler {}", inboundHandshakeHandler);
                         channel.pipeline()
                                 .addLast(new LoggingHandler())
                                 .addLast(new ProtobufVarint32FrameDecoder())
@@ -179,7 +178,6 @@ public class ClearNetTransportService implements TransportService {
         bootstrap.bind(port).addListener(future -> {
             if (future instanceof ChannelFuture channelFuture && future.isSuccess()) {
                 Channel channel = channelFuture.channel();
-                log.error("serverStarted");
                 serverStarted.complete(address);
             } else {
                 serverStarted.completeExceptionally(future.cause());
@@ -198,8 +196,6 @@ public class ClearNetTransportService implements TransportService {
                     @Override
                     protected void initChannel(SocketChannel socketChannel) {
                         OutboundHandshakeHandler outboundHandshakeHandler = handshakeHandler;
-                        log.error("outboundHandshakeHandler {}", outboundHandshakeHandler);
-
                         socketChannel.pipeline()
                                 .addLast(new LoggingHandler())
                                 .addLast(new ProtobufVarint32FrameDecoder())

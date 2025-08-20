@@ -54,16 +54,6 @@ public class InboundHandshakeHandler extends HandshakeHandler {
     }
 
     @Override
-    public void channelActive(ChannelHandlerContext context) {
-        log.error("channelActive");
-    }
-
-   /* @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        log.error("read: msg={}", msg);
-    }*/
-
-    @Override
     protected void channelRead0(ChannelHandlerContext context, bisq.network.protobuf.NetworkEnvelope proto) {
         try {
             if (proto == null) {
@@ -123,7 +113,7 @@ public class InboundHandshakeHandler extends HandshakeHandler {
             NetworkEnvelope responseNetworkEnvelope = new NetworkEnvelope(token, response);
             long startSendTs = System.currentTimeMillis();
 
-            context.writeAndFlush(responseNetworkEnvelope.toProto(false));
+            context.writeAndFlush(responseNetworkEnvelope.completeProto());
 
             connectionMetrics.onSent(responseNetworkEnvelope, System.currentTimeMillis() - startSendTs);
             connectionMetrics.addRtt(System.currentTimeMillis() - ts);

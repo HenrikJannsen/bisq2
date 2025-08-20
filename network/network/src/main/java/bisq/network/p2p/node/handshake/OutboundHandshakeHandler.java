@@ -85,7 +85,7 @@ public class OutboundHandshakeHandler extends HandshakeHandler {
                     peersFeatures);
             NetworkEnvelope requestNetworkEnvelope = new NetworkEnvelope(token, request);
             ts = System.currentTimeMillis();
-            bisq.network.protobuf.NetworkEnvelope proto = requestNetworkEnvelope.toProto(false);
+            bisq.network.protobuf.NetworkEnvelope proto = requestNetworkEnvelope.completeProto();
             context.writeAndFlush(proto);
             log.error("sent {}", request);
             connectionMetrics.onSent(requestNetworkEnvelope, System.currentTimeMillis() - ts);

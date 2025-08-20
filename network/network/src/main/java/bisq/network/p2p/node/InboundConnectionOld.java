@@ -20,26 +20,26 @@ package bisq.network.p2p.node;
 import bisq.network.p2p.node.authorization.AuthorizationService;
 import bisq.network.p2p.node.network_load.ConnectionMetrics;
 import bisq.network.p2p.node.network_load.NetworkLoadSnapshot;
-import io.netty.channel.ChannelHandlerContext;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.Socket;
 import java.util.function.BiConsumer;
 
 @Slf4j
-public class InboundConnection extends Connection {
+public class InboundConnectionOld extends ConnectionOld {
 
-    InboundConnection(AuthorizationService authorizationService,
-                      ChannelHandlerContext context,
-                      String connectionId,
-                      Capability peersCapability,
-                      NetworkLoadSnapshot peersNetworkLoadSnapshot,
-                      ConnectionMetrics connectionMetrics,
-                      ConnectionThrottle connectionThrottle,
-                      Handler handler,
-                      BiConsumer<Connection, Exception> errorHandler) {
+    InboundConnectionOld(AuthorizationService authorizationService,
+                         String connectionId,
+                         Socket socket,
+                         Capability peersCapability,
+                         NetworkLoadSnapshot peersNetworkLoadSnapshot,
+                         ConnectionMetrics connectionMetrics,
+                         ConnectionThrottle connectionThrottle,
+                         Handler handler,
+                         BiConsumer<ConnectionOld, Exception> errorHandler) {
         super(authorizationService,
-                context,
                 connectionId,
+                socket,
                 peersCapability,
                 peersNetworkLoadSnapshot,
                 connectionMetrics,
