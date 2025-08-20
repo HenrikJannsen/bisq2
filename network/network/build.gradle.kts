@@ -24,10 +24,18 @@ dependencies {
 
     integrationTestImplementation(libs.mockito)
 
+    // Netty
+    implementation("io.netty:netty-all:4.2.4.Final")
+
+    // Protobuf
+    //implementation("com.google.protobuf:protobuf-java:4.28.3")
+    implementation("io.netty:netty-codec-protobuf:4.2.4.Final")
+
+
+
     implementation("io.netty:netty-transport:4.2.4.Final")
     implementation("io.netty:netty-buffer:4.2.4.Final")
     implementation("io.netty:netty-common:4.2.4.Final")
-    implementation("io.netty:netty-handler:4.2.4.Final")
     implementation("io.netty:netty-handler:4.2.4.Final")
     implementation("io.netty:netty-handler-proxy:4.2.4.Final")
 

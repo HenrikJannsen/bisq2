@@ -7,6 +7,20 @@ import "network_identity.proto";
 import "security.proto";
 import "google/protobuf/any.proto";
 
+
+message Envelope {
+  oneof payload {
+    Handshake.Request handshakeRequest = 1;
+    Handshake.Response handshakeResponse = 2;
+    bytes body = 3;
+  }
+}
+
+message Handshake {
+  message Request { int32 version = 1; }
+  message Response { bool accepted = 1; }
+}
+
 ////////////////////////////////////////////////////////////////////
 // Data
 ////////////////////////////////////////////////////////////////////
