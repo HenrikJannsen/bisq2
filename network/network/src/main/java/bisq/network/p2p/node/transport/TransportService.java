@@ -65,7 +65,7 @@ public interface TransportService {
 
     default CompletableFuture<Address> startNettyServer(NetworkId networkId,
                                                         KeyBundle keyBundle,
-                                                        Supplier<InboundHandshakeHandler> handshakeHandler) {
+                                                        Supplier<InboundHandshakeHandler> handshakeHandlerSupplier) {
         return CompletableFuture.completedFuture(null);
     }
 
@@ -77,7 +77,7 @@ public interface TransportService {
         return Optional.empty();
     }
 
-    default CompletableFuture<Channel> connect(Address address, OutboundHandshakeHandler handshakeHandler) {
+    default CompletableFuture<Channel> connect(Address address, Supplier<OutboundHandshakeHandler> handshakeHandlerSupplier) {
         return null;
     }
 

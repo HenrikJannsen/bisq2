@@ -154,7 +154,7 @@ public class ClearNetTransportService implements TransportService {
     @Override
     public CompletableFuture<Address> startNettyServer(NetworkId networkId,
                                                        KeyBundle keyBundle,
-                                                       Supplier<InboundHandshakeHandler> handshakeHandler) {
+                                                       Supplier<InboundHandshakeHandler> handshakeHandlerSupplier) {
         int port = networkId.getAddressByTransportTypeMap().get(TransportType.CLEAR).getPort();
         Address address = getClearNetAddressTypeFacade().toMyLocalAddress(port);
         ServerBootstrap bootstrap = new ServerBootstrap();
@@ -164,7 +164,7 @@ public class ClearNetTransportService implements TransportService {
                 .childHandler(new ChannelInitializer<NioSocketChannel>() {
                     @Override
                     protected void initChannel(NioSocketChannel channel) {
-                        InboundHandshakeHandler inboundHandshakeHandler = handshakeHandler.get();
+                        InboundHandshakeHandler inboundHandshakeHandler = handshakeHandlerSupplier.get();
                         channel.pipeline()
                                 .addLast(new LoggingHandler())
                                 .addLast(new ProtobufVarint32FrameDecoder())
@@ -187,7 +187,7 @@ public class ClearNetTransportService implements TransportService {
     }
 
     @Override
-    public CompletableFuture<Channel> connect(Address address, OutboundHandshakeHandler handshakeHandler) {
+    public CompletableFuture<Channel> connect(Address address, Supplier<OutboundHandshakeHandler> handshakeHandlerSupplier) {
         CompletableFuture<Channel> future = new CompletableFuture<>();
         Bootstrap bootstrap = new Bootstrap();
         bootstrap.group(workerGroup)
@@ -195,7 +195,7 @@ public class ClearNetTransportService implements TransportService {
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     protected void initChannel(SocketChannel socketChannel) {
-                        OutboundHandshakeHandler outboundHandshakeHandler = handshakeHandler;
+                        OutboundHandshakeHandler outboundHandshakeHandler = handshakeHandlerSupplier.get();
                         socketChannel.pipeline()
                                 .addLast(new LoggingHandler())
                                 .addLast(new ProtobufVarint32FrameDecoder())

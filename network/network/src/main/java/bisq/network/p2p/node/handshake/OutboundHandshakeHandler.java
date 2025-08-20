@@ -30,6 +30,8 @@ import bisq.network.p2p.node.network_load.NetworkLoad;
 import bisq.network.p2p.services.peer_group.BanList;
 import bisq.security.keys.KeyBundle;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.proxy.ProxyConnectionEvent;
+import io.netty.handler.proxy.Socks5ProxyHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
@@ -61,12 +63,37 @@ public class OutboundHandshakeHandler extends HandshakeHandler {
     }
 
     @Override
-    public void channelActive(ChannelHandlerContext context) {
+    public void userEventTriggered(ChannelHandlerContext context, Object event) throws Exception {
+        // The Socks5ProxyHandler does the handshake protocol with the proxy asynchronously and fires the
+        // ProxyConnectionEvent once completed.
+        if (event instanceof ProxyConnectionEvent) {
+            log.info("SOCKS5 ready, sending handshake");
+            start(context);
+
+            // Socks5ProxyHandler not needed anymore
+            context.pipeline().remove(Socks5ProxyHandler.class);
+        }
+        super.userEventTriggered(context, event);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
+        cause.printStackTrace();
+        context.close();
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext context) throws Exception {
         log.error("channelActive");
+        super.channelActive(context);
+    }
+
+    private void start(ChannelHandlerContext context) {
         try {
             ConnectionMetrics connectionMetrics = new ConnectionMetrics();
 
             Address myAddress = myCapability.getAddress();
+            log.error("myAddress {}", myAddress);
             long signatureDate = System.currentTimeMillis();
             Optional<byte[]> signature = OnionAddressValidation.sign(myAddress, peerAddress, signatureDate, myKeyBundle.getTorKeyPair().getPrivateKey());
 
@@ -85,8 +112,14 @@ public class OutboundHandshakeHandler extends HandshakeHandler {
                     peersFeatures);
             NetworkEnvelope requestNetworkEnvelope = new NetworkEnvelope(token, request);
             ts = System.currentTimeMillis();
-            bisq.network.protobuf.NetworkEnvelope proto = requestNetworkEnvelope.completeProto();
-            context.writeAndFlush(proto);
+
+           /* ByteBuf buf = context.alloc().buffer();
+            buf.writeBytes(requestNetworkEnvelope.completeProto().toByteArray());
+            context.writeAndFlush(buf);*/
+
+            // context.writeAndFlush(Unpooled.wrappedBuffer("hello".getBytes(StandardCharsets.UTF_8)));
+
+            context.writeAndFlush(requestNetworkEnvelope.completeProto());
             log.error("sent {}", request);
             connectionMetrics.onSent(requestNetworkEnvelope, System.currentTimeMillis() - ts);
         } catch (Exception e) {
@@ -151,7 +184,7 @@ public class OutboundHandshakeHandler extends HandshakeHandler {
             log.debug("Peers capability {}, load={}", peersCapability, peersNetworkLoad);
             handler.onHandshakeCompleted(context, new Result(peersCapability, peersNetworkLoad, connectionMetrics, connectionId));
 
-              context.pipeline().remove(this);
+            context.pipeline().remove(this);
         } catch (Exception exception) {
             if (exception instanceof ConnectionException connectionException) {
                 throw connectionException;

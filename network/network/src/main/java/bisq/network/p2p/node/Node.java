@@ -38,7 +38,6 @@ import bisq.network.p2p.node.handshake.ConnectionHandshake;
 import bisq.network.p2p.node.handshake.HandshakeHandler;
 import bisq.network.p2p.node.handshake.InboundHandshakeHandler;
 import bisq.network.p2p.node.handshake.OutboundHandshakeHandler;
-import bisq.network.p2p.node.network_load.NetworkLoad;
 import bisq.network.p2p.node.network_load.NetworkLoadSnapshot;
 import bisq.network.p2p.node.transport.TransportService;
 import bisq.network.p2p.services.peer_group.BanList;
@@ -301,7 +300,8 @@ public class Node implements Connection.Handler {
                                     }
                                 }))
                 .whenComplete(((address, throwable) -> {
-                    log.error("Server started on{}", address);
+                    log.error("Server started for: {}", address);
+
                 }));
     }
 
@@ -587,7 +587,6 @@ public class Node implements Connection.Handler {
         HandshakeHandler.Handler handler = new HandshakeHandler.Handler() {
             @Override
             public void onHandshakeCompleted(ChannelHandlerContext context, HandshakeHandler.Result result) {
-                log.error("onHandshakeCompleted {}", result);
                 Address peersAddress = result.getPeersCapability().getAddress();
                 NetworkLoadSnapshot peersNetworkLoadSnapshot = new NetworkLoadSnapshot(result.getPeersNetworkLoad());
                 ConnectionThrottle connectionThrottle = new ConnectionThrottle(peersNetworkLoadSnapshot, networkLoadSnapshot, config);
@@ -611,15 +610,14 @@ public class Node implements Connection.Handler {
                 log.error("onClosed {}", channel);
             }
         };
-        NetworkLoad myNetworkLoad = networkLoadSnapshot.getCurrentNetworkLoad();
-        OutboundHandshakeHandler handshakeHandler = new OutboundHandshakeHandler(authorizationService,
-                banList,
-                myCapability,
-                myNetworkLoad,
-                keyBundle,
-                peersAddress,
-                handler);
-        transportService.connect(peersAddress, handshakeHandler)
+        transportService.connect(peersAddress,
+                        () -> new OutboundHandshakeHandler(authorizationService,
+                                banList,
+                                myCapability,
+                                networkLoadSnapshot.getCurrentNetworkLoad(),
+                                keyBundle,
+                                peersAddress,
+                                handler))
                 .whenComplete((channel, throwable) -> {
                     if (throwable == null && channel != null) {
                         log.error("Connection to {} established", peersAddress);
@@ -855,7 +853,7 @@ public class Node implements Connection.Handler {
 
     public Optional<Address> findMyAddress() {
         return myCapability.map(Capability::getAddress);
-       // return server.map(Server::getAddress);
+        // return server.map(Server::getAddress);
     }
 
     public boolean notMyself(Address address) {

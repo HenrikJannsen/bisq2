@@ -5,13 +5,36 @@ import bisq.common.network.TransportConfig;
 import bisq.common.network.TransportType;
 import bisq.common.observable.Observable;
 import bisq.common.observable.map.ObservableHashMap;
+import bisq.common.threading.ExecutorFactory;
 import bisq.network.identity.NetworkId;
 import bisq.network.p2p.node.ConnectionException;
+import bisq.network.p2p.node.handshake.InboundHandshakeHandler;
+import bisq.network.p2p.node.handshake.OutboundHandshakeHandler;
+import bisq.network.protobuf.NetworkEnvelope;
 import bisq.network.tor.TorService;
 import bisq.network.tor.TorTransportConfig;
 import bisq.security.keys.KeyBundle;
 import bisq.security.keys.TorKeyPair;
 import com.runjva.sourceforge.jsocks.protocol.Socks5Proxy;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.protobuf.ProtobufDecoder;
+import io.netty.handler.codec.protobuf.ProtobufEncoder;
+import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
+import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.proxy.Socks5ProxyHandler;
+import io.netty.resolver.NoopAddressResolverGroup;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,6 +45,9 @@ import java.net.Socket;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 
 @Slf4j
@@ -62,6 +88,105 @@ public class TorTransportService implements TransportService {
         setTransportState(TransportState.STOPPING);
         return torService.shutdown()
                 .whenComplete((result, throwable) -> setTransportState(TransportState.TERMINATED));
+    }
+
+
+    private final EventLoopGroup bossGroup = new NioEventLoopGroup();
+    private final EventLoopGroup workerGroup = new NioEventLoopGroup();
+
+    @Override
+    public CompletableFuture<Address> startNettyServer(NetworkId networkId,
+                                                       KeyBundle keyBundle,
+                                                       Supplier<InboundHandshakeHandler> handshakeHandlerSupplier) {
+
+        try {
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            bootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .handler(new LoggingHandler())
+                    .childHandler(new ChannelInitializer<NioSocketChannel>() {
+                        @Override
+                        protected void initChannel(NioSocketChannel channel) {
+                            InboundHandshakeHandler inboundHandshakeHandler = handshakeHandlerSupplier.get();
+                            // For inbound tor connections we don't need the Socks5ProxyHandler, only for outbound.
+                            channel.pipeline()
+                                    .addLast(new LoggingHandler())
+                                    .addLast(new ProtobufVarint32FrameDecoder())
+                                    .addLast(new ProtobufDecoder(NetworkEnvelope.getDefaultInstance()))
+                                    .addLast(new ProtobufVarint32LengthFieldPrepender())
+                                    .addLast(new ProtobufEncoder())
+                                    .addLast(inboundHandshakeHandler);
+                        }
+                    });
+            int port = networkId.getAddressByTransportTypeMap().get(TransportType.TOR).getPort();
+            TorKeyPair torKeyPair = keyBundle.getTorKeyPair();
+            Address address = evaluateMyAddress(networkId, keyBundle).get();
+            CompletableFuture<Address> serverFuture = new CompletableFuture<>();
+            torService.publishOnionServiceForNetty(port, torKeyPair)
+                    .whenComplete((localPort, throwable) -> {
+                        if (throwable == null) {
+                            bootstrap.bind(localPort).addListener(future -> {
+                                if (future instanceof ChannelFuture channelFuture && future.isSuccess()) {
+                                    Channel channel = channelFuture.channel();
+                                    serverFuture.complete(address);
+                                } else {
+                                    serverFuture.completeExceptionally(future.cause());
+                                }
+                            });
+                        } else {
+                            log.error("publishOnionServiceForNetty failed", throwable);
+                        }
+                    });
+            return serverFuture;
+        } catch (InterruptedException e) {
+            log.warn("Thread got interrupted at getServerSocket method", e);
+            Thread.currentThread().interrupt(); // Restore interrupted state
+            throw new ConnectionException(e);
+        } catch (ExecutionException e) {
+            throw new ConnectionException(e);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Channel> connect(Address address,
+                                              Supplier<OutboundHandshakeHandler> handshakeHandlerSupplier) {
+        return CompletableFuture.supplyAsync(() -> {
+            int socksPort = torService.getSocksPort();
+            checkArgument(socksPort != -1, "socksPort is not yet set. torService must be initialized before connect is called.");
+            CompletableFuture<Channel> future = new CompletableFuture<>();
+            Bootstrap bootstrap = new Bootstrap();
+            bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000000);
+            bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
+            bootstrap.resolver(NoopAddressResolverGroup.INSTANCE);
+            bootstrap.group(workerGroup)
+                    .channel(NioSocketChannel.class)
+                    .handler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel socketChannel) {
+                            OutboundHandshakeHandler outboundHandshakeHandler = handshakeHandlerSupplier.get();
+                            Socks5ProxyHandler socks5ProxyHandler = new Socks5ProxyHandler(new InetSocketAddress("127.0.0.1", socksPort));
+                            socks5ProxyHandler.setConnectTimeoutMillis(1000000);
+                            socketChannel.pipeline()
+                                    .addFirst(socks5ProxyHandler)
+                                    .addLast(new ProtobufVarint32FrameDecoder())
+                                    .addLast(new ProtobufDecoder(NetworkEnvelope.getDefaultInstance()))
+                                    .addLast(new ProtobufVarint32LengthFieldPrepender())
+                                    .addLast(new ProtobufEncoder())
+                                    .addLast(outboundHandshakeHandler);
+                        }
+                    });
+
+            // Create unresolved socket address so Tor handles DNS resolution
+            InetSocketAddress unresolved = InetSocketAddress.createUnresolved(address.getHost(), address.getPort());
+            ChannelFuture connect = bootstrap.connect(unresolved);
+            connect.addListener((ChannelFutureListener) channelFuture -> {
+                if (!channelFuture.isSuccess()) {
+                    // complete only on TCP failure (e.g., Tor not listening)
+                    future.completeExceptionally(channelFuture.cause());
+                }
+            });
+            return future.join();
+        }, ExecutorFactory.newSingleThreadExecutor(""));
     }
 
     @Override
