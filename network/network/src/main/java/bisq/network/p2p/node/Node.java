@@ -42,19 +42,6 @@ import bisq.network.p2p.services.peer_group.BanList;
 import bisq.security.keys.KeyBundle;
 import bisq.security.keys.KeyBundleService;
 import com.runjva.sourceforge.jsocks.protocol.Socks5Proxy;
-import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.channel.nio.NioIoHandler;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.proxy.Socks5ProxyHandler;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -63,12 +50,10 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.EOFException;
 import java.io.IOException;
 import java.net.ConnectException;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
@@ -222,70 +207,8 @@ public class Node implements Connection.Handler {
     // Server
     /* --------------------------------------------------------------------- */
 
-    public CompletableFuture<Void> setupNetty() {
-        String proxyHost = "127.0.0.1"; // Tor SOCKS5 proxy
-        int proxyPort = 9050;
-        String targetHost = "example.com"; // destination host
-        int targetPort = 80;               // destination port
-
-        return CompletableFuture.runAsync(() -> {
-            EventLoopGroup group = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
-            try {
-                Bootstrap bootstrap = new Bootstrap();
-                bootstrap.group(group)
-                        .channel(NioSocketChannel.class)
-                        //.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
-                        .handler(new ChannelInitializer<SocketChannel>() {
-                            @Override
-                            protected void initChannel(SocketChannel socketChannel) {
-                                ChannelPipeline pipeline = socketChannel.pipeline();
-
-                                Socks5ProxyHandler socks5ProxyHandler = new Socks5ProxyHandler(new InetSocketAddress(proxyHost, proxyPort));
-                                pipeline.addFirst(socks5ProxyHandler);
-
-                                // Handler to send and receive messages
-                                pipeline.addLast(new SimpleChannelInboundHandler<ByteBuf>() {
-
-                                    @Override
-                                    public void channelActive(ChannelHandlerContext ctx) {
-                                        // Once the connection is established via proxy, send a message
-                                        String msg = "Hello Tor world!\r\n";
-                                        ByteBuf buffer = ctx.alloc().buffer();
-                                        buffer.writeBytes(msg.getBytes(StandardCharsets.UTF_8));
-                                        ctx.writeAndFlush(buffer);
-                                        System.out.println("Message sent: " + msg);
-                                    }
-
-                                    @Override
-                                    protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
-                                        // Read response from the socket
-                                        byte[] bytes = new byte[msg.readableBytes()];
-                                        msg.readBytes(bytes);
-                                        System.out.println("Received: " + new String(bytes, StandardCharsets.UTF_8));
-                                    }
-
-                                    @Override
-                                    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-                                        cause.printStackTrace();
-                                        ctx.close();
-                                    }
-                                });
-                            }
-                        });
-
-                // Connect to target via proxy
-                ChannelFuture channelFuture = bootstrap.connect(targetHost, targetPort).sync();
-                channelFuture.channel().closeFuture().sync();
-
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } finally {
-                group.shutdownGracefully();
-            }
-        });
-    }
-
     public CompletableFuture<Node> initializeAsync() {
+
         return CompletableFuture.supplyAsync(() -> {
             if (startingStateLatch.isPresent() && startingStateLatch.get().getCount() > 0) {
                 try {

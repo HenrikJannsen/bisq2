@@ -44,6 +44,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 
 @Slf4j
 public class PeerConnectionsManager {
+
     private final Node.Config config;
     private final NetworkId networkId;
     private final BanList banList;
