@@ -19,6 +19,8 @@ package bisq.network.p2p.node.envelope;
 
 import bisq.common.network.PeerSocket;
 import bisq.network.p2p.message.NetworkEnvelope;
+import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Closeable;
@@ -26,8 +28,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 @Slf4j
 public class NetworkEnvelopeSocket implements Closeable {
+    // 2.25 MB is our limit. Inventory requests are capped to about 2 MB
+    private final static int MAX_ALLOWED_SIZE = 2_250_000;
     private final PeerSocket socket;
     private final InputStream inputStream;
     private final OutputStream outputStream;
@@ -44,7 +50,22 @@ public class NetworkEnvelopeSocket implements Closeable {
     }
 
     public bisq.network.protobuf.NetworkEnvelope receiveNextEnvelope() throws IOException {
-        return bisq.network.protobuf.NetworkEnvelope.parseDelimitedFrom(inputStream);
+        try {
+            int firstByte = inputStream.read();
+            if (firstByte == -1) {
+                // If EOF we return early
+                return null;
+            }
+            int size = CodedInputStream.readRawVarint32(firstByte, inputStream);
+            checkArgument(size > 0, "Size of protobuf message must not be 0");
+            checkArgument(size <= MAX_ALLOWED_SIZE, "Size of protobuf message exceeds our limit. size=" + size);
+            CodedInputStream codedInput = CodedInputStream.newInstance(inputStream);
+            codedInput.pushLimit(size);
+            codedInput.setRecursionLimit(20); // TODO with limit of 7 we can observe exceptions. Not sure which message causes that recursion
+            return bisq.network.protobuf.NetworkEnvelope.parseFrom(codedInput);
+        } catch (IOException e) {
+            throw new InvalidProtocolBufferException(e);
+        }
     }
 
     @Override
