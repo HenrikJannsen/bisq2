@@ -18,18 +18,20 @@
 package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.limits;
 
 import bisq.desktop.common.view.Model;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import lombok.Getter;
 
 @Getter
 public class MuSigAmountLimitsModel implements Model {
-    private final StringProperty formattedMinTradeAmountLimit = new SimpleStringProperty();
-    private final StringProperty formattedMaxTradeAmountLimit = new SimpleStringProperty();
-    private final StringProperty formattedMinTradeAmountLimitInUsd = new SimpleStringProperty();
-    private final StringProperty formattedMaxTradeAmountLimitInUsd = new SimpleStringProperty();
-    private final StringProperty tradeAmountLimitCode = new SimpleStringProperty();
-    private final BooleanProperty showTradeAmountLimitInUsd = new SimpleBooleanProperty();
+    private final String minInUsd;
+    private final String maxInUsd;
+    private final StringProperty min = new SimpleStringProperty();
+    private final StringProperty max = new SimpleStringProperty();
+    private final StringProperty code = new SimpleStringProperty();
+
+    public MuSigAmountLimitsModel(String minInUsd, String maxInUsd) {
+        this.minInUsd = minInUsd;
+        this.maxInUsd = maxInUsd;
+    }
 }

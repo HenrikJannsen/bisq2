@@ -21,14 +21,18 @@ import bisq.common.observable.Pin;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.common.view.Controller;
+import bisq.i18n.Res;
 import bisq.offer.mu_sig.draft.CreateOfferDraftWorkflow;
-import bisq.presentation.formatters.AmountFormatter;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.easybind.Subscription;
 
 import java.util.HashSet;
 import java.util.Set;
+
+import static bisq.mu_sig.MuSigTradeAmountLimits.MAX_TRADE_AMOUNT_IN_USD;
+import static bisq.mu_sig.MuSigTradeAmountLimits.MIN_TRADE_AMOUNT_IN_USD;
+import static bisq.presentation.formatters.AmountFormatter.formatAmountByMonetaryType;
 
 @Slf4j
 public class MuSigAmountLimitsController implements Controller {
@@ -42,7 +46,10 @@ public class MuSigAmountLimitsController implements Controller {
     public MuSigAmountLimitsController(ServiceProvider serviceProvider,
                                        CreateOfferDraftWorkflow createOfferDraftWorkflow) {
         this.createOfferDraftWorkflow = createOfferDraftWorkflow;
-        model = new MuSigAmountLimitsModel();
+
+        String minInUsd = Res.get("muSig.offer.create.amount.slider.limit.usd", formatAmountByMonetaryType(MIN_TRADE_AMOUNT_IN_USD));
+        String maxInInUsd = Res.get("muSig.offer.create.amount.slider.limit.usd", formatAmountByMonetaryType(MAX_TRADE_AMOUNT_IN_USD));
+        model = new MuSigAmountLimitsModel(minInUsd, maxInInUsd);
         view = new MuSigAmountLimitsView(model, this);
     }
 
@@ -56,8 +63,9 @@ public class MuSigAmountLimitsController implements Controller {
         // Domain specific
         pins.add(createOfferDraftWorkflow.inputAmountLimitsObservable().addObserver(inputAmountLimits -> {
             UIThread.run(() -> {
-                model.getFormattedMinTradeAmountLimit().set(AmountFormatter.formatAmountByMonetaryType(inputAmountLimits.getMin()));
-                model.getFormattedMaxTradeAmountLimit().set(AmountFormatter.formatAmountByMonetaryType(inputAmountLimits.getMax()));
+                model.getMin().set(formatAmountByMonetaryType(inputAmountLimits.getMin()));
+                model.getMax().set(formatAmountByMonetaryType(inputAmountLimits.getMax()));
+                model.getCode().set(inputAmountLimits.getMax().getCode());
             });
         }));
     }

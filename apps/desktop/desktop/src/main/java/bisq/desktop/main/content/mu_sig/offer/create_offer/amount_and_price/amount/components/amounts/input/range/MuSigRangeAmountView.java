@@ -48,7 +48,7 @@ public class MuSigRangeAmountView extends View<VBox, MuSigRangeAmountModel, MuSi
                                 HBox minPassiveAmount,
                                 HBox maxPassiveAmount,
                                 VBox amountSlider,
-                                VBox amountLimits) {
+                                HBox amountLimits) {
         super(new VBox(), model, controller);
 
         root.setAlignment(Pos.TOP_CENTER);

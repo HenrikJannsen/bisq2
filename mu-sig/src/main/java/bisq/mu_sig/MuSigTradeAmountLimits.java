@@ -53,17 +53,11 @@ import static bisq.bonded_roles.market_price.MarketBasedAmountConversion.fiatToU
 
 @Slf4j
 public class MuSigTradeAmountLimits {
-    public static final Fiat MIN_USD_TRADE_AMOUNT = Fiat.fromFaceValue(10, "USD");
-
-
-    /* --------------------------------------------------------------------- */
-    // MaxTradeLimit
-    /* --------------------------------------------------------------------- */
-
-    public static final Fiat MAX_USD_TRADE_AMOUNT = Fiat.fromFaceValue(10000, "USD");
+    public static final Fiat MIN_TRADE_AMOUNT_IN_USD = Fiat.fromFaceValue(10, "USD");
+    public static final Fiat MAX_TRADE_AMOUNT_IN_USD = Fiat.fromFaceValue(10000, "USD");
 
     public static Fiat getMaxTradeLimitInUsd(PaymentRail paymentRail) {
-        return getMaxTradeLimitInUsd(paymentRail, MAX_USD_TRADE_AMOUNT);
+        return getMaxTradeLimitInUsd(paymentRail, MAX_TRADE_AMOUNT_IN_USD);
     }
 
     public static String getFormattedMaxTradeLimitInUsd(PaymentRail paymentRail) {
@@ -111,7 +105,7 @@ public class MuSigTradeAmountLimits {
 
     public static Optional<Monetary> getMinQuoteSideTradeAmount(MarketPriceService marketPriceService, Market market) {
         return marketPriceService.findMarketPriceQuote(MarketRepository.getUSDBitcoinMarket())
-                .map(priceQuote -> priceQuote.toBaseSideMonetary(MIN_USD_TRADE_AMOUNT))
+                .map(priceQuote -> priceQuote.toBaseSideMonetary(MIN_TRADE_AMOUNT_IN_USD))
                 .flatMap(defaultMinBtcTradeAmount -> marketPriceService.findMarketPriceQuote(market)
                         .map(priceQuote -> priceQuote.toQuoteSideMonetary(defaultMinBtcTradeAmount)));
     }
@@ -131,7 +125,7 @@ public class MuSigTradeAmountLimits {
         // A reputation score of 30k gives a max trade amount of 150 USD
         // Upper limit is 600 USD
         Monetary maxAmountAllowedByReputation = getUsdAmountFromReputationScore(totalScore);
-        long value = Math.min(MAX_USD_TRADE_AMOUNT.getValue(), maxAmountAllowedByReputation.getValue());
+        long value = Math.min(MAX_TRADE_AMOUNT_IN_USD.getValue(), maxAmountAllowedByReputation.getValue());
         return Fiat.fromValue(value, "USD");
     }
 

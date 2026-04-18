@@ -46,7 +46,7 @@ public class MuSigFixAmountView extends View<VBox, MuSigFixAmountModel, MuSigFix
                               HBox amountInput,
                               HBox passiveAmount,
                               VBox amountSlider,
-                              VBox amountLimits) {
+                              HBox amountLimits) {
         super(new VBox(), model, controller);
 
         root.setAlignment(Pos.TOP_CENTER);
