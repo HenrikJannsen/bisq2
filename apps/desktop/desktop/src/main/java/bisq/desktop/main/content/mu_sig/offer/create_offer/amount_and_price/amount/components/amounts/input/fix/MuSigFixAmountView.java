@@ -45,7 +45,8 @@ public class MuSigFixAmountView extends View<VBox, MuSigFixAmountModel, MuSigFix
                               MuSigFixAmountController controller,
                               HBox amountInput,
                               HBox passiveAmount,
-                              VBox amountSlider) {
+                              VBox amountSlider,
+                              VBox amountLimits) {
         super(new VBox(), model, controller);
 
         root.setAlignment(Pos.TOP_CENTER);
@@ -68,7 +69,7 @@ public class MuSigFixAmountView extends View<VBox, MuSigFixAmountModel, MuSigFix
         Pane amountInputHBoxPane = new Pane(layoutHelper, amountInput);
 
         VBox.setMargin(amountSlider, new Insets(40, 0, 0, 0));
-        root.getChildren().addAll(amountInputHBoxPane, passiveAmountAndToggle, amountSlider);
+        root.getChildren().addAll(amountInputHBoxPane, passiveAmountAndToggle, amountSlider, amountLimits);
     }
 
     @Override

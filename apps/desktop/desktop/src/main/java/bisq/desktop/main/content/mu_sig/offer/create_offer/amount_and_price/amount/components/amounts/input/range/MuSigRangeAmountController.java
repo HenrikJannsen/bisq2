@@ -24,8 +24,9 @@ import bisq.common.observable.Pin;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.common.view.Controller;
-import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.input.MuSigAmountTextInputController;
-import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.slider.MuSigAmountSliderController;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.limits.MuSigAmountLimitsController;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.range.slider.MuSigRangeAmountSliderController;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.text.MuSigAmountTextInputController;
 import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.passive.MuSigPassiveAmountController;
 import bisq.offer.mu_sig.draft.CreateOfferDraftWorkflow;
 import javafx.beans.property.ReadOnlyBooleanProperty;
@@ -44,12 +45,13 @@ public class MuSigRangeAmountController implements Controller {
     private final MuSigRangeAmountView view;
     private final MuSigAmountTextInputController minAmountInputController;
     private final MuSigPassiveAmountController minPassiveAmountController;
-    private final MuSigAmountSliderController amountSliderController;
+    private final MuSigRangeAmountSliderController amountSliderController;
     private final MuSigAmountTextInputController maxAmountInputController;
     private final MuSigPassiveAmountController maxPassiveAmountController;
     private final CreateOfferDraftWorkflow createOfferDraftWorkflow;
     private final Set<Subscription> subscriptions = new HashSet<>();
     private final Set<Pin> pins = new HashSet<>();
+    private final MuSigAmountLimitsController amountLimitsController;
 
     public MuSigRangeAmountController(ServiceProvider serviceProvider,
                                       CreateOfferDraftWorkflow createOfferDraftWorkflow) {
@@ -60,14 +62,16 @@ public class MuSigRangeAmountController implements Controller {
         maxAmountInputController = new MuSigAmountTextInputController(serviceProvider, createOfferDraftWorkflow, false, false);
         minPassiveAmountController = new MuSigPassiveAmountController(serviceProvider, createOfferDraftWorkflow, true);
         maxPassiveAmountController = new MuSigPassiveAmountController(serviceProvider, createOfferDraftWorkflow, false);
-        amountSliderController = new MuSigAmountSliderController(serviceProvider, createOfferDraftWorkflow);
+        amountSliderController = new MuSigRangeAmountSliderController(serviceProvider, createOfferDraftWorkflow);
+        amountLimitsController = new MuSigAmountLimitsController(serviceProvider, createOfferDraftWorkflow);
 
         view = new MuSigRangeAmountView(model, this,
                 minAmountInputController.getView().getRoot(),
                 maxAmountInputController.getView().getRoot(),
                 minPassiveAmountController.getView().getRoot(),
                 maxPassiveAmountController.getView().getRoot(),
-                amountSliderController.getView().getRoot()
+                amountSliderController.getView().getRoot(),
+                amountLimitsController.getView().getRoot()
         );
     }
 

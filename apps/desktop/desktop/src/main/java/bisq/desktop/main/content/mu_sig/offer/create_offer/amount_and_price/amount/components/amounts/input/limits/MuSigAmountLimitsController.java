@@ -15,7 +15,7 @@
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.slider;
+package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.limits;
 
 import bisq.common.observable.Pin;
 import bisq.desktop.ServiceProvider;
@@ -29,19 +29,19 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Slf4j
-public class MuSigAmountSliderController implements Controller {
-    private final MuSigActiveAmountSliderModel model;
+public class MuSigAmountLimitsController implements Controller {
+    private final MuSigAmountLimitsModel model;
     @Getter
-    private final MuSigActiveAmountSliderView view;
+    private final MuSigAmountLimitsView view;
     private final Set<Subscription> subscriptions = new HashSet<>();
     private final Set<Pin> pins = new HashSet<>();
     private final CreateOfferDraftWorkflow createOfferDraftWorkflow;
 
-    public MuSigAmountSliderController(ServiceProvider serviceProvider,
+    public MuSigAmountLimitsController(ServiceProvider serviceProvider,
                                        CreateOfferDraftWorkflow createOfferDraftWorkflow) {
         this.createOfferDraftWorkflow = createOfferDraftWorkflow;
-        model = new MuSigActiveAmountSliderModel();
-        view = new MuSigActiveAmountSliderView(model, this);
+        model = new MuSigAmountLimitsModel();
+        view = new MuSigAmountLimitsView(model, this);
     }
 
 
@@ -51,7 +51,7 @@ public class MuSigAmountSliderController implements Controller {
 
     @Override
     public void onActivate() {
-        model.getValue().set(0.3);
+       // model.getValue().set(0.3);
     }
 
     @Override
@@ -73,4 +73,14 @@ public class MuSigAmountSliderController implements Controller {
     // UI handlers
     /* --------------------------------------------------------------------- */
 
+
+    double onGetMaxAllowedSliderValue() {
+        return  1;
+      /*  MonetaryRange rangeQuoteSideAmount = model.getRangeQuoteSideAmount().get();
+        if (rangeQuoteSideAmount == null) {
+            return 0;
+        }
+        Monetary maxRangeQuoteSideAmount = rangeQuoteSideAmount.getMax();
+        return getSliderValue(maxRangeQuoteSideAmount.getValue());*/
+    }
 }
