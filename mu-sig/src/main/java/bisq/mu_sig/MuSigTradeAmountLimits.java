@@ -19,6 +19,7 @@ package bisq.mu_sig;
 
 import bisq.account.payment_method.PaymentRail;
 import bisq.account.payment_method.fiat.FiatPaymentRail;
+import bisq.bonded_roles.market_price.MarketBasedAmountConversion;
 import bisq.bonded_roles.market_price.MarketPriceService;
 import bisq.chat.bisq_easy.offerbook.BisqEasyOfferbookChannel;
 import bisq.chat.bisq_easy.offerbook.BisqEasyOfferbookChannelService;
@@ -49,7 +50,6 @@ import java.util.stream.Collectors;
 import static bisq.bonded_roles.market_price.MarketBasedAmountConversion.btcToUsd;
 import static bisq.bonded_roles.market_price.MarketBasedAmountConversion.fiatToBtc;
 import static bisq.bonded_roles.market_price.MarketBasedAmountConversion.fiatToUsd;
-import static bisq.bonded_roles.market_price.MarketBasedAmountConversion.usdToFiat;
 
 @Slf4j
 public class MuSigTradeAmountLimits {
@@ -304,7 +304,7 @@ public class MuSigTradeAmountLimits {
                         // We have a range amount and max amount is higher as rep score. We use rep score based amount as result.
                         // Min amounts are handled by the filtered collection already.
                         Monetary usdAmountFromSellersReputationScore = getUsdAmountFromReputationScore(sellersReputationScore);
-                        Monetary fiatAmountFromSellersReputationScore = usdToFiat(marketPriceService, offerMarket, usdAmountFromSellersReputationScore).orElseThrow();
+                        Monetary fiatAmountFromSellersReputationScore = MarketBasedAmountConversion.usdToFiat(marketPriceService, offerMarket, usdAmountFromSellersReputationScore).orElseThrow();
                         return Optional.of(fiatAmountFromSellersReputationScore);
                     } catch (Exception e) {
                         log.warn("Failed to evaluate highest amount for offer {}: {}", offer.getId(), e.getMessage(), e);

@@ -32,8 +32,4 @@ public class MuSigAmountLimitsModel implements Model {
     private final StringProperty formattedMaxTradeAmountLimitInUsd = new SimpleStringProperty();
     private final StringProperty tradeAmountLimitCode = new SimpleStringProperty();
     private final BooleanProperty showTradeAmountLimitInUsd = new SimpleBooleanProperty();
-
-    public final int amountBoxWidth = 300;
-    public final int amountBoxHeight = 120;
-
 }

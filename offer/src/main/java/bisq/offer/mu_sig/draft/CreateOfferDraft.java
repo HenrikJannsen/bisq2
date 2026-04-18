@@ -20,8 +20,10 @@ package bisq.offer.mu_sig.draft;
 import bisq.account.accounts.Account;
 import bisq.account.payment_method.PaymentMethod;
 import bisq.common.market.Market;
+import bisq.common.monetary.MonetaryRange;
 import bisq.common.monetary.PriceQuote;
 import bisq.common.monetary.TradeAmount;
+import bisq.common.monetary.TradeAmountRange;
 import bisq.common.observable.Observable;
 import bisq.common.observable.ReadOnlyObservable;
 import bisq.common.observable.map.ObservableHashMap;
@@ -50,6 +52,8 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
     private final Observable<TradeAmount> minTradeAmount = new Observable<>();
     private final Observable<TradeAmount> maxTradeAmount = new Observable<>();
     private final Observable<AmountSpec> amountSpec = new Observable<>();
+    private final Observable<TradeAmountRange> tradeAmountLimits = new Observable<>();
+    private final Observable<MonetaryRange> inputAmountLimits = new Observable<>();
 
     public CreateOfferDraft() {
     }
@@ -281,5 +285,41 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
     @Override
     public AmountSpec getAmountSpec() {
         return amountSpec.get();
+    }
+
+
+    /* --------------------------------------------------------------------- */
+    // TradeAmountLimits
+    /* --------------------------------------------------------------------- */
+
+    void setTradeAmountLimits(TradeAmountRange tradeAmountLimits) {
+        this.tradeAmountLimits.set(tradeAmountLimits);
+    }
+
+    @Override
+    public ReadOnlyObservable<TradeAmountRange> tradeAmountLimitsObservable() {
+        return tradeAmountLimits;
+    }
+
+    public TradeAmountRange getTradeAmountLimits() {
+        return tradeAmountLimits.get();
+    }
+
+
+    /* --------------------------------------------------------------------- */
+    // InputAmountLimits
+    /* --------------------------------------------------------------------- */
+
+    void setInputAmountLimits(MonetaryRange inputAmountLimits) {
+        this.inputAmountLimits.set(inputAmountLimits);
+    }
+
+    @Override
+    public ReadOnlyObservable<MonetaryRange> inputAmountLimitsObservable() {
+        return inputAmountLimits;
+    }
+
+    public MonetaryRange getInputAmountLimits() {
+        return inputAmountLimits.get();
     }
 }

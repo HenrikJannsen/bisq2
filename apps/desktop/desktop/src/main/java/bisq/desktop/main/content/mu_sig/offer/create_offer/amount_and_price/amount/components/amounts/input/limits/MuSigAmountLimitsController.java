@@ -19,8 +19,10 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 
 import bisq.common.observable.Pin;
 import bisq.desktop.ServiceProvider;
+import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.common.view.Controller;
 import bisq.offer.mu_sig.draft.CreateOfferDraftWorkflow;
+import bisq.presentation.formatters.AmountFormatter;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.easybind.Subscription;
@@ -51,7 +53,13 @@ public class MuSigAmountLimitsController implements Controller {
 
     @Override
     public void onActivate() {
-       // model.getValue().set(0.3);
+        // Domain specific
+        pins.add(createOfferDraftWorkflow.inputAmountLimitsObservable().addObserver(inputAmountLimits -> {
+            UIThread.run(() -> {
+                model.getFormattedMinTradeAmountLimit().set(AmountFormatter.formatAmountByMonetaryType(inputAmountLimits.getMin()));
+                model.getFormattedMaxTradeAmountLimit().set(AmountFormatter.formatAmountByMonetaryType(inputAmountLimits.getMax()));
+            });
+        }));
     }
 
     @Override
@@ -75,7 +83,7 @@ public class MuSigAmountLimitsController implements Controller {
 
 
     double onGetMaxAllowedSliderValue() {
-        return  1;
+        return 1;
       /*  MonetaryRange rangeQuoteSideAmount = model.getRangeQuoteSideAmount().get();
         if (rangeQuoteSideAmount == null) {
             return 0;

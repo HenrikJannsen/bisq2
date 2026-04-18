@@ -25,9 +25,11 @@ import bisq.common.market.Market;
 import bisq.common.market.MarketRepository;
 import bisq.common.monetary.Fiat;
 import bisq.common.monetary.Monetary;
+import bisq.common.monetary.MonetaryRange;
 import bisq.common.monetary.PriceQuote;
 import bisq.common.monetary.TradeAmount;
 import bisq.common.monetary.TradeAmountConversion;
+import bisq.common.monetary.TradeAmountRange;
 import bisq.offer.Direction;
 import bisq.offer.amount.spec.AmountSpec;
 import bisq.offer.amount.spec.AmountSpecFactory;
@@ -91,6 +93,8 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         setMinTradeAmount(defaultTradeAmount);
         setMaxTradeAmount(defaultTradeAmount);
         updateAmountSpec();
+        updateTradeAmountLimits();
+        updateInputAmountLimits();
     }
 
     @Override
@@ -110,6 +114,8 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
             updateFixTradeAmount();
             updateMinTradeAmount();
             updateMaxTradeAmount();
+            updateTradeAmountLimits();
+            updateInputAmountLimits();
         }));
 
         pin(selectedAccountByPaymentMethodObservable().addObserver(() -> {
@@ -125,7 +131,7 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         }));
 
         pin(useBaseCurrencyForAmountInputObservable().addObserver(value -> {
-
+            updateInputAmountLimits();
         }));
         pin(useRangeAmountObservable().addObserver(value -> {
             updateAmountSpec();
@@ -148,6 +154,8 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
             }
         }));
         pin(amountSpecObservable().addObserver(value -> {
+        }));
+        pin(tradeAmountLimitsObservable().addObserver(value -> {
         }));
     }
 
@@ -224,6 +232,37 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         setAmountSpec(createBaseSideAmountSpec());
     }
 
+    private void updateTradeAmountLimits() {
+        Market market = getMarket();
+        TradeAmount minTradeAmount = MarketBasedAmountConversion.tradeAmountFromUsdAndMarket(marketPriceService,
+                market,
+                TradeAmountLimits.MIN_TRADE_AMOUNT_IN_USD);
+        TradeAmount maxTradeAmount = MarketBasedAmountConversion.tradeAmountFromUsdAndMarket(marketPriceService,
+                market,
+                getMaxTradeAmountInUsd());
+
+        TradeAmountRange tradeAmountLimit = new TradeAmountRange(minTradeAmount, maxTradeAmount);
+        setTradeAmountLimits(tradeAmountLimit);
+    }
+
+    private void updateInputAmountLimits() {
+        TradeAmountRange tradeAmountLimits = getTradeAmountLimits();
+        checkNotNull(tradeAmountLimits, "tradeAmountLimits must not be null");
+        MonetaryRange inputAmountLimits = toInputAmountLimits(tradeAmountLimits);
+        setInputAmountLimits(inputAmountLimits);
+    }
+
+    private MonetaryRange toInputAmountLimits(TradeAmountRange tradeAmountLimits) {
+        Monetary minInputAmount = getInputAmount(tradeAmountLimits.getMin());
+        Monetary maxInputAmount = getInputAmount(tradeAmountLimits.getMax());
+        return new MonetaryRange(minInputAmount, maxInputAmount);
+    }
+
+
+    private static Fiat getMaxTradeAmountInUsd() {
+        // todo based on payment method
+        return TradeAmountLimits.MAX_USD_TRADE_AMOUNT;
+    }
 
 
     /* --------------------------------------------------------------------- */
@@ -309,5 +348,15 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
     public void setAmountSpec(AmountSpec amountSpec) {
         checkNotNull(amountSpec, "AmountSpec must not be null");
         offerDraft.setAmountSpec(amountSpec);
+    }
+
+    public void setTradeAmountLimits(TradeAmountRange tradeAmountRange) {
+        checkNotNull(tradeAmountRange, "TradeAmountRange must not be null");
+        offerDraft.setTradeAmountLimits(tradeAmountRange);
+    }
+
+    public void setInputAmountLimits(MonetaryRange inputAmountLimits) {
+        checkNotNull(inputAmountLimits, "inputAmountLimits must not be null");
+        offerDraft.setInputAmountLimits(inputAmountLimits);
     }
 }

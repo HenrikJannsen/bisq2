@@ -19,7 +19,6 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 
 import bisq.desktop.common.view.View;
 import bisq.desktop.components.containers.Spacer;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
@@ -40,14 +39,14 @@ public class MuSigAmountLimitsView extends View<VBox, MuSigAmountLimitsModel, Mu
         minTradeAmountLimitValue.getStyleClass().add("range-value");
         minTradeAmountLimitCode = new Label();
         minTradeAmountLimitCode.getStyleClass().add("range-code");
-        HBox minTradeAmountLimitBox = new HBox(2, minTradeAmountLimitValue, minTradeAmountLimitCode);
+        HBox minTradeAmountLimitBox = new HBox(minTradeAmountLimitValue, minTradeAmountLimitCode);
         minTradeAmountLimitBox.setAlignment(Pos.BASELINE_LEFT);
 
         maxTradeAmountLimitValue = new Label();
         maxTradeAmountLimitValue.getStyleClass().add("range-value");
         maxTradeAmountLimitCode = new Label();
         maxTradeAmountLimitCode.getStyleClass().add("range-code");
-        HBox maxTradeAmountLimitBox = new HBox(2, maxTradeAmountLimitValue, maxTradeAmountLimitCode);
+        HBox maxTradeAmountLimitBox = new HBox(maxTradeAmountLimitValue, maxTradeAmountLimitCode);
         maxTradeAmountLimitBox.setAlignment(Pos.BASELINE_RIGHT);
 
         // limits in USD
@@ -55,26 +54,26 @@ public class MuSigAmountLimitsView extends View<VBox, MuSigAmountLimitsModel, Mu
         minTradeAmountLimitInUsdValue.getStyleClass().add("range-value-secondary");
         Label minTradeAmountLimitInUsdCode = new Label("USD");
         minTradeAmountLimitInUsdCode.getStyleClass().add("range-code-secondary");
-        HBox minTradeAmountLimitInUsdBox = new HBox(2, minTradeAmountLimitInUsdValue, minTradeAmountLimitInUsdCode);
+        HBox minTradeAmountLimitInUsdBox = new HBox(minTradeAmountLimitInUsdValue, minTradeAmountLimitInUsdCode);
         minTradeAmountLimitInUsdBox.setAlignment(Pos.BASELINE_LEFT);
 
         maxTradeAmountLimitInUsdValue = new Label();
         maxTradeAmountLimitInUsdValue.getStyleClass().add("range-value-secondary");
         Label maxTradeAmountLimitInUsdCode = new Label("USD");
         maxTradeAmountLimitInUsdCode.getStyleClass().add("range-code-secondary");
-        HBox maxTradeAmountLimitInUsdBox = new HBox(2, maxTradeAmountLimitInUsdValue, maxTradeAmountLimitInUsdCode);
+        HBox maxTradeAmountLimitInUsdBox = new HBox(maxTradeAmountLimitInUsdValue, maxTradeAmountLimitInUsdCode);
         maxTradeAmountLimitInUsdBox.setAlignment(Pos.BASELINE_RIGHT);
 
         tradeAmountLimitsBox = new HBox(minTradeAmountLimitBox, Spacer.fillHBox(), maxTradeAmountLimitBox);
         tradeAmountLimitsInUsdBox = new HBox(minTradeAmountLimitInUsdBox, Spacer.fillHBox(), maxTradeAmountLimitInUsdBox);
         tradeAmountLimitsInUsdBox.setOpacity(0.5);
 
-        VBox vBox = new VBox( tradeAmountLimitsBox, tradeAmountLimitsInUsdBox);
-        vBox.setMaxWidth(model.getAmountBoxWidth() + 40);
+      //  VBox vBox = new VBox( tradeAmountLimitsBox, tradeAmountLimitsInUsdBox);
+       // vBox.setMaxWidth(model.getAmountBoxWidth() + 40);
 
-        VBox.setMargin(vBox, new Insets(30, 0, 0, 0));
-        root.getChildren().addAll(vBox);
-        root.setAlignment(Pos.TOP_CENTER);
+       // VBox.setMargin(vBox, new Insets(30, 0, 0, 0));
+        root.getChildren().addAll(tradeAmountLimitsBox, tradeAmountLimitsInUsdBox);
+      //  root.setAlignment(Pos.TOP_CENTER);
     }
 
     @Override

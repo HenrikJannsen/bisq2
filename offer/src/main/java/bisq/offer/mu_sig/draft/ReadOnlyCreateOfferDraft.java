@@ -20,8 +20,10 @@ package bisq.offer.mu_sig.draft;
 import bisq.account.accounts.Account;
 import bisq.account.payment_method.PaymentMethod;
 import bisq.common.market.Market;
+import bisq.common.monetary.MonetaryRange;
 import bisq.common.monetary.PriceQuote;
 import bisq.common.monetary.TradeAmount;
+import bisq.common.monetary.TradeAmountRange;
 import bisq.common.observable.ReadOnlyObservable;
 import bisq.common.observable.map.ReadOnlyObservableMap;
 import bisq.offer.Direction;
@@ -83,4 +85,8 @@ public abstract class ReadOnlyCreateOfferDraft extends ReadOnlyOfferDraft {
     public abstract ReadOnlyObservable<Boolean> useRangeAmountObservable();
 
     public abstract boolean getUseRangeAmount();
+
+    public abstract ReadOnlyObservable<TradeAmountRange> tradeAmountLimitsObservable();
+
+    public abstract ReadOnlyObservable<MonetaryRange> inputAmountLimitsObservable();
 }
