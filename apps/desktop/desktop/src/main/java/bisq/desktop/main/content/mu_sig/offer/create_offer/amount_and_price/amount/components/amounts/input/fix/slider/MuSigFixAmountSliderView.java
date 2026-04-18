@@ -48,36 +48,14 @@ public class MuSigFixAmountSliderView extends View<VBox, MuSigFixAmountSliderMod
     @Override
     protected void onViewAttached() {
         slider.valueProperty().bindBidirectional(model.getGetSliderValue());
-        subscriptions.add(EasyBind.subscribe(model.getMaxAllowedValue(),
-                maxAllowedValue -> {
-                    applySliderTrackStyle(maxAllowedValue.doubleValue());
-                }));
-
-        slider.valueProperty().addListener((obs, oldV, newV) -> {
+        subscriptions.add(EasyBind.subscribe(slider.valueProperty(), value -> {
             double maxAllowedValue = model.getMaxAllowedValue().get();
-            if (newV.doubleValue() > maxAllowedValue) {
+            if (value.doubleValue() > maxAllowedValue) {
                 slider.setValue(maxAllowedValue);
             }
-        });
 
-        slider.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-            double percent = e.getX() / slider.getWidth();
-            double value = slider.getMin() + percent * (slider.getMax() - slider.getMin());
-            double maxAllowedValue = model.getMaxAllowedValue().get();
-            if (value > maxAllowedValue) {
-                e.consume();
-            }
-        });
-
-        slider.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_DRAGGED, e -> {
-            double percent = e.getX() / slider.getWidth();
-            double value = slider.getMin() + percent * (slider.getMax() - slider.getMin());
-            double maxAllowedValue = model.getMaxAllowedValue().get();
-            if (value > maxAllowedValue) {
-                slider.setValue(maxAllowedValue);
-                e.consume();
-            }
-        });
+            applySliderTrackStyle(maxAllowedValue);
+        }));
     }
 
     @Override
