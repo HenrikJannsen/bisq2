@@ -72,7 +72,8 @@ public class MuSigAmountTextInputController implements Controller {
                 change -> {
                     // Check if added string is valid. Can be a number or the local specific decimal separator.
                     // change.getText() is freshly added string
-                    if (!NumberValidation.isValidNumberInputToken(change.getText())) {
+                    String changeText = change.getText();
+                    if (!changeText.isEmpty() && !NumberValidation.isValidNumberInputToken(changeText)) {
                         return null;
                     }
                     // change.getControlNewText() is full string in input field

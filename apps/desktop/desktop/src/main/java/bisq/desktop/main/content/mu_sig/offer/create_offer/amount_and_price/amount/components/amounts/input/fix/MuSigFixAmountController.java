@@ -133,7 +133,6 @@ public class MuSigFixAmountController implements Controller {
     void onToggleInputMode() {
         boolean useBaseCurrencyForAmountInput = createOfferDraftWorkflow.getUseBaseCurrencyForAmountInput();
         boolean value = !useBaseCurrencyForAmountInput;
-        // model.getUseBaseCurrencyForAmountInput().set(value);
         createOfferDraftWorkflow.setUseBaseCurrencyForAmountInput(value);
     }
 
