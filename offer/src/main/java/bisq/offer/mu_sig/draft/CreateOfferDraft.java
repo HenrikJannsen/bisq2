@@ -34,6 +34,7 @@ import bisq.offer.price.spec.PriceSpec;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.Map;
+import java.util.Optional;
 
 public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
     protected final Observable<Market> market = new Observable<>();
@@ -51,9 +52,15 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
     private final Observable<TradeAmount> fixTradeAmount = new Observable<>();
     private final Observable<TradeAmount> minTradeAmount = new Observable<>();
     private final Observable<TradeAmount> maxTradeAmount = new Observable<>();
+    private final Observable<Optional<TradeAmount>> userSpecificTradeAmountLimit = new Observable<>();
+    private final Observable<Optional<Double>> userSpecificTradeAmountLimitAsSliderValue = new Observable<>();
     private final Observable<AmountSpec> amountSpec = new Observable<>();
     private final Observable<TradeAmountRange> tradeAmountLimits = new Observable<>();
     private final Observable<MonetaryRange> inputAmountLimits = new Observable<>();
+
+    private final Observable<Double> fixAmountSliderValue = new Observable<>();
+    private final Observable<Double> minAmountSliderValue = new Observable<>();
+    private final Observable<Double> maxAmountSliderValue = new Observable<>();
 
     public CreateOfferDraft() {
     }
@@ -101,6 +108,14 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
     // selectedAccountByPaymentMethod
     /* --------------------------------------------------------------------- */
 
+    void clearSelectedAccountByPaymentMethod() {
+        selectedAccountByPaymentMethod.clear();
+    }
+
+    void putAllSelectedAccountByPaymentMethod(Map<PaymentMethod<?>, Account<?, ?>> selectedAccountByPaymentMethod) {
+        this.selectedAccountByPaymentMethod.putAll(selectedAccountByPaymentMethod);
+    }
+
     @Override
     public ReadOnlyObservableMap<PaymentMethod<?>, Account<?, ?>> selectedAccountByPaymentMethodObservable() {
         return selectedAccountByPaymentMethod;
@@ -110,15 +125,6 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
     public ImmutableMap<PaymentMethod<?>, Account<?, ?>> getSelectedAccountByPaymentMethod() {
         return ImmutableMap.copyOf(selectedAccountByPaymentMethod);
     }
-
-    void clearSelectedAccountByPaymentMethod() {
-        selectedAccountByPaymentMethod.clear();
-    }
-
-    void putAllSelectedAccountByPaymentMethod(Map<PaymentMethod<?>, Account<?, ?>> selectedAccountByPaymentMethod) {
-        this.selectedAccountByPaymentMethod.putAll(selectedAccountByPaymentMethod);
-    }
-
 
 
     /* --------------------------------------------------------------------- */
@@ -269,6 +275,8 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
         return maxTradeAmount.get();
     }
 
+
+
     /* --------------------------------------------------------------------- */
     // AmountSpec
     /* --------------------------------------------------------------------- */
@@ -301,8 +309,47 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
         return tradeAmountLimits;
     }
 
+    @Override
     public TradeAmountRange getTradeAmountLimits() {
         return tradeAmountLimits.get();
+    }
+
+
+    /* --------------------------------------------------------------------- */
+    // userSpecificTradeAmountLimit
+    /* --------------------------------------------------------------------- */
+
+    void setUserSpecificTradeAmountLimit(Optional<TradeAmount> userSpecificTradeAmountLimit) {
+        this.userSpecificTradeAmountLimit.set(userSpecificTradeAmountLimit);
+    }
+
+    @Override
+    public ReadOnlyObservable<Optional<TradeAmount>> userSpecificTradeAmountLimitObservable() {
+        return userSpecificTradeAmountLimit;
+    }
+
+    @Override
+    public Optional<TradeAmount> getUserSpecificTradeAmountLimit() {
+        return userSpecificTradeAmountLimit.get();
+    }
+
+
+    /* --------------------------------------------------------------------- */
+    // userSpecificTradeAmountLimitAsSliderValue
+    /* --------------------------------------------------------------------- */
+
+    void setUserSpecificTradeAmountLimitAsSliderValue(Optional<Double> sliderValue) {
+        this.userSpecificTradeAmountLimitAsSliderValue.set(sliderValue);
+    }
+
+    @Override
+    public ReadOnlyObservable<Optional<Double>> userSpecificTradeAmountLimitAsSliderValueObservable() {
+        return userSpecificTradeAmountLimitAsSliderValue;
+    }
+
+    @Override
+    public Optional<Double> getUserSpecificTradeAmountLimitAsSliderValue() {
+        return userSpecificTradeAmountLimitAsSliderValue.get();
     }
 
 
@@ -319,7 +366,28 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
         return inputAmountLimits;
     }
 
+    @Override
     public MonetaryRange getInputAmountLimits() {
         return inputAmountLimits.get();
     }
+
+    /* --------------------------------------------------------------------- */
+    // fixAmountSliderValue
+    /* --------------------------------------------------------------------- */
+
+    void setFixAmountSliderValue(double sliderValue) {
+        this.fixAmountSliderValue.set(sliderValue);
+    }
+
+    @Override
+    public ReadOnlyObservable<Double> fixAmountSliderValueObservable() {
+        return fixAmountSliderValue;
+    }
+
+    @Override
+    public Double getFixAmountSliderValue() {
+        return fixAmountSliderValue.get();
+    }
+
+
 }

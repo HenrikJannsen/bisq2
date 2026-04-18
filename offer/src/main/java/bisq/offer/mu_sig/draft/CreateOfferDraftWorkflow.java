@@ -30,6 +30,7 @@ import bisq.common.monetary.PriceQuote;
 import bisq.common.monetary.TradeAmount;
 import bisq.common.monetary.TradeAmountConversion;
 import bisq.common.monetary.TradeAmountRange;
+import bisq.common.util.MathUtils;
 import bisq.offer.Direction;
 import bisq.offer.amount.spec.AmountSpec;
 import bisq.offer.amount.spec.AmountSpecFactory;
@@ -42,7 +43,9 @@ import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
+import java.util.Optional;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 @Slf4j
@@ -94,6 +97,8 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         setMaxTradeAmount(defaultTradeAmount);
         updateAmountSpec();
         updateTradeAmountLimits();
+        updateUserSpecificTradeAmountLimit();
+        updateUserSpecificTradeAmountLimitAsSliderValue();
         updateInputAmountLimits();
     }
 
@@ -115,9 +120,15 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
             updateMinTradeAmount();
             updateMaxTradeAmount();
             updateTradeAmountLimits();
+            updateUserSpecificTradeAmountLimit();
+            updateUserSpecificTradeAmountLimitAsSliderValue();
             updateInputAmountLimits();
         }));
 
+        pin(directionObservable().addObserver(direction -> {
+            updateUserSpecificTradeAmountLimit();
+            updateUserSpecificTradeAmountLimitAsSliderValue();
+        }));
         pin(selectedAccountByPaymentMethodObservable().addObserver(() -> {
         }));
 
@@ -141,6 +152,7 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         pin(fixTradeAmountObservable().addObserver(value -> {
             if (!getUseRangeAmount()) {
                 updateAmountSpec();
+                updateFixAmountSliderValue();
             }
         }));
         pin(minTradeAmountObservable().addObserver(value -> {
@@ -164,6 +176,21 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
     // Domain methods
     /* --------------------------------------------------------------------- */
 
+    public void setFixTradeAmountFromSliderValue(double sliderValue) {
+        checkArgument(sliderValue >= 0 && sliderValue <= 1, "sliderValue must be in range of 0 and 1");
+
+        MonetaryRange inputAmountLimits = getInputAmountLimits();
+        long min = inputAmountLimits.getMin().getValue();
+        long max = inputAmountLimits.getMax().getValue();
+        long diff = max - min;
+        long sliderAmountValue = min + Math.round(sliderValue * diff);
+        TradeAmount fixTradeAmount = getFixTradeAmount();
+        Monetary inputAmount = toInputAmount(fixTradeAmount);
+        Monetary sliderAmount = Monetary.from(inputAmount, sliderAmountValue);
+        TradeAmount tradeAmount = toTradeAmount(sliderAmount);
+        setFixTradeAmount(tradeAmount);
+    }
+
     public void setFixTradeAmountFromInputAmount(Monetary amount) {
         checkNotNull(amount, "amount must not be null");
         TradeAmount tradeAmount = toTradeAmount(amount);
@@ -182,7 +209,7 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         setMaxTradeAmount(tradeAmount);
     }
 
-    public Monetary getInputAmount(TradeAmount tradeAmount) {
+    public Monetary toInputAmount(TradeAmount tradeAmount) {
         if (getUseBaseCurrencyForAmountInput()) {
             return tradeAmount.getBaseSideAmount();
         } else {
@@ -190,7 +217,7 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         }
     }
 
-    public Monetary getPassiveAmount(TradeAmount tradeAmount) {
+    public Monetary toPassiveAmount(TradeAmount tradeAmount) {
         if (getUseBaseCurrencyForAmountInput()) {
             return tradeAmount.getQuoteSideAmount();
         } else {
@@ -213,17 +240,17 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
     }
 
     private void updateFixTradeAmount() {
-        Monetary inputAmount = getInputAmount(getFixTradeAmount());
+        Monetary inputAmount = toInputAmount(getFixTradeAmount());
         setFixTradeAmountFromInputAmount(inputAmount);
     }
 
     private void updateMinTradeAmount() {
-        Monetary inputAmount = getInputAmount(getMinTradeAmount());
+        Monetary inputAmount = toInputAmount(getMinTradeAmount());
         setMinTradeAmountFromInputAmount(inputAmount);
     }
 
     private void updateMaxTradeAmount() {
-        Monetary inputAmount = getInputAmount(getMaxTradeAmount());
+        Monetary inputAmount = toInputAmount(getMaxTradeAmount());
         setMaxTradeAmountFromInputAmount(inputAmount);
     }
 
@@ -245,6 +272,29 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         setTradeAmountLimits(tradeAmountLimit);
     }
 
+    private void updateUserSpecificTradeAmountLimit() {
+        if (getDirection().isBuy()) {
+            //todo
+            Fiat limit = Fiat.fromFaceValue(3000, "USD");
+            TradeAmount userSpecificTradeAmountLimit = MarketBasedAmountConversion.tradeAmountFromUsdAndMarket(marketPriceService,
+                    getMarket(),
+                    limit);
+            setUserSpecificTradeAmountLimit(Optional.of(userSpecificTradeAmountLimit));
+        } else {
+            setUserSpecificTradeAmountLimit(Optional.empty());
+        }
+    }
+
+    private void updateUserSpecificTradeAmountLimitAsSliderValue() {
+        if (getDirection().isBuy() && getUserSpecificTradeAmountLimit().isPresent()) {
+            TradeAmount userSpecificTradeAmountLimit = getUserSpecificTradeAmountLimit().get();
+            double sliderValue = toSliderValue(userSpecificTradeAmountLimit);
+            setUserSpecificTradeAmountLimitAsSliderValue(Optional.of(sliderValue));
+        } else {
+            setUserSpecificTradeAmountLimitAsSliderValue(Optional.empty());
+        }
+    }
+
     private void updateInputAmountLimits() {
         TradeAmountRange tradeAmountLimits = getTradeAmountLimits();
         checkNotNull(tradeAmountLimits, "tradeAmountLimits must not be null");
@@ -252,17 +302,12 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         setInputAmountLimits(inputAmountLimits);
     }
 
-    private MonetaryRange toInputAmountLimits(TradeAmountRange tradeAmountLimits) {
-        Monetary minInputAmount = getInputAmount(tradeAmountLimits.getMin());
-        Monetary maxInputAmount = getInputAmount(tradeAmountLimits.getMax());
-        return new MonetaryRange(minInputAmount, maxInputAmount);
+    private void updateFixAmountSliderValue() {
+        TradeAmount fixTradeAmount = getFixTradeAmount();
+        double sliderValue = toSliderValue(fixTradeAmount);
+        setFixAmountSliderValue(sliderValue);
     }
 
-
-    private static Fiat getMaxTradeAmountInUsd() {
-        // todo based on payment method
-        return TradeAmountLimits.MAX_USD_TRADE_AMOUNT;
-    }
 
 
     /* --------------------------------------------------------------------- */
@@ -280,6 +325,26 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
                 getFixTradeAmount());
     }
 
+    private MonetaryRange toInputAmountLimits(TradeAmountRange tradeAmountLimits) {
+        Monetary minInputAmount = toInputAmount(tradeAmountLimits.getMin());
+        Monetary maxInputAmount = toInputAmount(tradeAmountLimits.getMax());
+        return new MonetaryRange(minInputAmount, maxInputAmount);
+    }
+
+    private double toSliderValue(TradeAmount tradeAmount) {
+        Monetary inputAmount = toInputAmount(tradeAmount);
+        MonetaryRange inputAmountLimits = getInputAmountLimits();
+        long min = inputAmountLimits.getMin().getValue();
+        long max = inputAmountLimits.getMax().getValue();
+        double diff = max - min;
+        double sliderValue = (inputAmount.getValue() - min) / diff;
+        return MathUtils.bounded(0, 1, sliderValue);
+    }
+
+    private static Fiat getMaxTradeAmountInUsd() {
+        // todo based on payment method
+        return TradeAmountLimits.MAX_USD_TRADE_AMOUNT;
+    }
 
 
     /* --------------------------------------------------------------------- */
@@ -355,8 +420,24 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         offerDraft.setTradeAmountLimits(tradeAmountRange);
     }
 
+    public void setUserSpecificTradeAmountLimit(Optional<TradeAmount> tradeAmount) {
+        tradeAmount.ifPresent(amount -> checkNotNull(amount, "tradeAmount must not be null"));
+        offerDraft.setUserSpecificTradeAmountLimit(tradeAmount);
+    }
+
+    void setUserSpecificTradeAmountLimitAsSliderValue(Optional<Double> value) {
+        value.ifPresent(v -> checkArgument(v >= 0 && v <= 1, "value must be in range of 0 and 1"));
+        offerDraft.setUserSpecificTradeAmountLimitAsSliderValue(value);
+    }
+
     public void setInputAmountLimits(MonetaryRange inputAmountLimits) {
         checkNotNull(inputAmountLimits, "inputAmountLimits must not be null");
         offerDraft.setInputAmountLimits(inputAmountLimits);
     }
+
+    void setFixAmountSliderValue(double sliderValue) {
+        checkArgument(sliderValue >= 0 && sliderValue <= 1, "sliderValue must be in range of 0 and 1");
+        offerDraft.setFixAmountSliderValue(sliderValue);
+    }
+
 }

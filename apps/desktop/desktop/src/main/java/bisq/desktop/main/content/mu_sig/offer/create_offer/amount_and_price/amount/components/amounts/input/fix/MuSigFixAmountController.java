@@ -152,13 +152,13 @@ public class MuSigFixAmountController implements Controller {
 
     private void applyInputAmount() {
         TradeAmount tradeAmount = createOfferDraftWorkflow.getFixTradeAmount();
-        Monetary inputAmount = createOfferDraftWorkflow.getInputAmount(tradeAmount);
+        Monetary inputAmount = createOfferDraftWorkflow.toInputAmount(tradeAmount);
         amountTextInputController.setAmount(inputAmount);
     }
 
     private void applyPassiveAmount() {
         TradeAmount tradeAmount = createOfferDraftWorkflow.getFixTradeAmount();
-        Monetary passiveAmount = createOfferDraftWorkflow.getPassiveAmount(tradeAmount);
+        Monetary passiveAmount = createOfferDraftWorkflow.toPassiveAmount(tradeAmount);
         passiveAmountController.setAmount(passiveAmount);
     }
 

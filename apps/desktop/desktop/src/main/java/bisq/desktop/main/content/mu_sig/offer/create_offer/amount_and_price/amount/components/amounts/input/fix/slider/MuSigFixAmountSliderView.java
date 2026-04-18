@@ -18,65 +18,34 @@
 package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.fix.slider;
 
 import bisq.desktop.common.view.View;
-import javafx.beans.value.ChangeListener;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.VBox;
 import lombok.extern.slf4j.Slf4j;
-import org.fxmisc.easybind.EasyBind;
-import org.fxmisc.easybind.Subscription;
 
 @Slf4j
 public class MuSigFixAmountSliderView extends View<VBox, MuSigFixAmountSliderModel, MuSigFixAmountSliderController> {
-    private final Slider fixedAmountSlider;
-    private final ChangeListener<Number> maxOrFixedAmountSliderValueListener, minAmountSliderValueListener;
-    private Subscription  sliderTrackStylePin;
+    private final Slider slider;
 
     public MuSigFixAmountSliderView(MuSigFixAmountSliderModel model,
                                     MuSigFixAmountSliderController controller) {
         super(new VBox(10), model, controller);
 
-        fixedAmountSlider = new Slider();
-        fixedAmountSlider.setMin(model.getSliderMin());
-        fixedAmountSlider.setMax(model.getSliderMax());
-        fixedAmountSlider.getStyleClass().add("fixed-amount-slider");
+        slider = new Slider(0,1,0);
+        slider.getStyleClass().add("fixed-amount-slider");
 
-
-        VBox sliderBox = new VBox( fixedAmountSlider);
-        sliderBox.setMaxWidth(model.getAmountBoxWidth() + 40);
-
-        VBox.setMargin(sliderBox, new Insets(30, 0, 0, 0));
-        root.getChildren().addAll(sliderBox);
-        root.setAlignment(Pos.TOP_CENTER);
-
-        maxOrFixedAmountSliderValueListener = (observable, oldValue, newValue) -> {
-            double maxAllowedSliderValue = controller.onGetMaxAllowedSliderValue();
-            fixedAmountSlider.setValue(Math.min(newValue.doubleValue(), maxAllowedSliderValue));
-        };
-        minAmountSliderValueListener = (observable, oldValue, newValue) -> {
-            double maxAllowedSliderValue = controller.onGetMaxAllowedSliderValue();
-        };
+        root.getChildren().add(slider);
     }
 
     @Override
     protected void onViewAttached() {
-        sliderTrackStylePin = EasyBind.subscribe(model.getSliderTrackStyle(), trackStyle -> {
-            fixedAmountSlider.setStyle(trackStyle);
-        });
-
-        fixedAmountSlider.valueProperty().bindBidirectional(model.getMaxOrFixedAmountSliderValue());
-        fixedAmountSlider.valueProperty().addListener(maxOrFixedAmountSliderValueListener);
-        model.getMaxOrFixedAmountSliderFocus().bind(fixedAmountSlider.focusedProperty());
+        slider.valueProperty().bindBidirectional(model.getSliderValue());
+        slider.styleProperty().bind(model.getSliderTrackStyle());
     }
 
     @Override
     protected void onViewDetached() {
-        sliderTrackStylePin.unsubscribe();
-
-        fixedAmountSlider.valueProperty().unbindBidirectional(model.getMaxOrFixedAmountSliderValue());
-        fixedAmountSlider.valueProperty().removeListener(maxOrFixedAmountSliderValueListener);
-        model.getMaxOrFixedAmountSliderFocus().unbind();
+        slider.valueProperty().unbindBidirectional(model.getSliderValue());
+        slider.styleProperty().unbind();
     }
 
 }

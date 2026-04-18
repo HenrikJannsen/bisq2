@@ -31,6 +31,8 @@ import bisq.offer.amount.spec.AmountSpec;
 import bisq.offer.price.spec.PriceSpec;
 import com.google.common.collect.ImmutableMap;
 
+import java.util.Optional;
+
 public abstract class ReadOnlyCreateOfferDraft extends ReadOnlyOfferDraft {
 
     public abstract ReadOnlyObservable<Market> marketObservable();
@@ -57,8 +59,6 @@ public abstract class ReadOnlyCreateOfferDraft extends ReadOnlyOfferDraft {
     public abstract ReadOnlyObservable<PriceSpec> priceSpecObservable();
 
 
-
-
     public abstract ReadOnlyObservable<TradeAmount> defaultTradeAmountObservable();
 
     public abstract TradeAmount getDefaultTradeAmount();
@@ -79,8 +79,17 @@ public abstract class ReadOnlyCreateOfferDraft extends ReadOnlyOfferDraft {
     public abstract TradeAmount getMaxTradeAmount();
 
 
-    public abstract ReadOnlyObservable<AmountSpec> amountSpecObservable();
+    public abstract TradeAmountRange getTradeAmountLimits();
 
+    public abstract ReadOnlyObservable<Optional<TradeAmount>> userSpecificTradeAmountLimitObservable();
+
+    public abstract Optional<TradeAmount> getUserSpecificTradeAmountLimit();
+
+    public abstract ReadOnlyObservable<Optional<Double>> userSpecificTradeAmountLimitAsSliderValueObservable();
+
+    public abstract Optional<Double> getUserSpecificTradeAmountLimitAsSliderValue();
+
+    public abstract ReadOnlyObservable<AmountSpec> amountSpecObservable();
 
     public abstract ReadOnlyObservable<Boolean> useRangeAmountObservable();
 
@@ -89,4 +98,11 @@ public abstract class ReadOnlyCreateOfferDraft extends ReadOnlyOfferDraft {
     public abstract ReadOnlyObservable<TradeAmountRange> tradeAmountLimitsObservable();
 
     public abstract ReadOnlyObservable<MonetaryRange> inputAmountLimitsObservable();
+
+    public abstract MonetaryRange getInputAmountLimits();
+
+    public abstract ReadOnlyObservable<Double> fixAmountSliderValueObservable();
+
+    public abstract Double getFixAmountSliderValue();
+
 }

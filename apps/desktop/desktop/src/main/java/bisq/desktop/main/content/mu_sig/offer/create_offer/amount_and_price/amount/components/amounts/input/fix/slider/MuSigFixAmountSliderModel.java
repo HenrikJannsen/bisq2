@@ -18,9 +18,7 @@
 package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.fix.slider;
 
 import bisq.desktop.common.view.Model;
-import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
-import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -28,15 +26,7 @@ import lombok.Getter;
 
 @Getter
 public class MuSigFixAmountSliderModel implements Model {
-    private final DoubleProperty maxOrFixedAmountSliderValue = new SimpleDoubleProperty();
-    private final DoubleProperty minAmountSliderValue = new SimpleDoubleProperty();
-    private final BooleanProperty maxOrFixedAmountSliderFocus = new SimpleBooleanProperty();
-    private final BooleanProperty minAmountSliderFocus = new SimpleBooleanProperty();
+    private final DoubleProperty sliderValue = new SimpleDoubleProperty();
     private final StringProperty sliderTrackStyle = new SimpleStringProperty();
-
-    private final double sliderMin = 0;
-    private final double sliderMax = 1;
-    public final int amountBoxWidth = 300;
-    public final int amountBoxHeight = 120;
 
 }

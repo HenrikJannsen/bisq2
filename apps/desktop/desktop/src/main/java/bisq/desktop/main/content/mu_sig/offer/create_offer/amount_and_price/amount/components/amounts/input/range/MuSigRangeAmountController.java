@@ -192,25 +192,25 @@ public class MuSigRangeAmountController implements Controller {
 
     private void applyMinInputAmount() {
         TradeAmount tradeAmount = createOfferDraftWorkflow.getMinTradeAmount();
-        Monetary inputAmount = createOfferDraftWorkflow.getInputAmount(tradeAmount);
+        Monetary inputAmount = createOfferDraftWorkflow.toInputAmount(tradeAmount);
         minAmountInputController.setAmount(inputAmount);
     }
 
     private void applyMaxInputAAmount() {
         TradeAmount tradeAmount = createOfferDraftWorkflow.getMaxTradeAmount();
-        Monetary inputAmount = createOfferDraftWorkflow.getInputAmount(tradeAmount);
+        Monetary inputAmount = createOfferDraftWorkflow.toInputAmount(tradeAmount);
         maxAmountInputController.setAmount(inputAmount);
     }
 
     private void applyMinPassiveAmount() {
         TradeAmount tradeAmount = createOfferDraftWorkflow.getMinTradeAmount();
-        Monetary passiveAmount = createOfferDraftWorkflow.getPassiveAmount(tradeAmount);
+        Monetary passiveAmount = createOfferDraftWorkflow.toPassiveAmount(tradeAmount);
         minPassiveAmountController.setAmount(passiveAmount);
     }
 
     private void applyMaxPassiveAmount() {
         TradeAmount tradeAmount = createOfferDraftWorkflow.getMaxTradeAmount();
-        Monetary passiveAmount = createOfferDraftWorkflow.getPassiveAmount(tradeAmount);
+        Monetary passiveAmount = createOfferDraftWorkflow.toPassiveAmount(tradeAmount);
         maxPassiveAmountController.setAmount(passiveAmount);
     }
 
