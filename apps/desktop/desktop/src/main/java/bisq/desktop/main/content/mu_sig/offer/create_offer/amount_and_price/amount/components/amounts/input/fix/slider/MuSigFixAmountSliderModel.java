@@ -20,18 +20,19 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 import bisq.desktop.common.view.Model;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Getter
+@Getter(AccessLevel.PACKAGE)
 public class MuSigFixAmountSliderModel implements Model {
     private final DoubleProperty maxAllowedValue = new SimpleDoubleProperty(1);
 
-    private final DoubleProperty getSliderValue = new SimpleDoubleProperty() {
+    private final DoubleProperty getSliderValue = new SimpleDoubleProperty(0) {
         @Override
         public void set(double value) {
-            super.set(Math.min(value,  maxAllowedValue.get()));
+            super.set(Math.min(value, maxAllowedValue.get()));
         }
     };
 }

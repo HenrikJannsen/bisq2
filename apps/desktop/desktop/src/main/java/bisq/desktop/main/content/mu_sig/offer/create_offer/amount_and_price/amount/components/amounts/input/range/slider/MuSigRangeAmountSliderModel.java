@@ -18,27 +18,26 @@
 package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.range.slider;
 
 import bisq.desktop.common.view.Model;
-import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
-import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
+import lombok.AccessLevel;
 import lombok.Getter;
 
-@Getter
+@Getter(AccessLevel.PACKAGE)
 public class MuSigRangeAmountSliderModel implements Model {
-    private final DoubleProperty maxOrFixedAmountSliderValue = new SimpleDoubleProperty();
-    private final DoubleProperty minAmountSliderValue = new SimpleDoubleProperty();
-    private final BooleanProperty maxOrFixedAmountSliderFocus = new SimpleBooleanProperty();
-    private final BooleanProperty minAmountSliderFocus = new SimpleBooleanProperty();
-    private final BooleanProperty rangeSliderLowThumbFocus = new SimpleBooleanProperty();
-    private final BooleanProperty rangeSliderHighThumbFocus = new SimpleBooleanProperty();
-    private final StringProperty sliderTrackStyle = new SimpleStringProperty();
+    private final DoubleProperty maxAllowedValue = new SimpleDoubleProperty(1);
 
-    private final double sliderMin = 0;
-    private final double sliderMax = 1;
-    public final int amountBoxWidth = 300;
-    public final int amountBoxHeight = 120;
+    private final DoubleProperty lowValue = new SimpleDoubleProperty(0) {
+        @Override
+        public void set(double value) {
+            super.set(Math.min(value, maxAllowedValue.get()));
+        }
+    };
 
+    private final DoubleProperty highValue = new SimpleDoubleProperty(0) {
+        @Override
+        public void set(double value) {
+            super.set(Math.min(value, maxAllowedValue.get()));
+        }
+    };
 }

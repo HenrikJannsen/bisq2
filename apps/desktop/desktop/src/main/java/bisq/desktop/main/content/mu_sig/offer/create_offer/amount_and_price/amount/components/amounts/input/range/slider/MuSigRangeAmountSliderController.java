@@ -19,10 +19,13 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 
 import bisq.common.observable.Pin;
 import bisq.desktop.ServiceProvider;
+import bisq.desktop.common.observable.FxBindings;
+import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.common.view.Controller;
 import bisq.offer.mu_sig.draft.CreateOfferDraftWorkflow;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.fxmisc.easybind.EasyBind;
 import org.fxmisc.easybind.Subscription;
 
 import java.util.HashSet;
@@ -49,9 +52,36 @@ public class MuSigRangeAmountSliderController implements Controller {
     // Lifecycle
     /* --------------------------------------------------------------------- */
 
+
     @Override
     public void onActivate() {
-       // model.getValue().set(0.3);
+        subscriptions.add(EasyBind.subscribe(model.getLowValue(),
+                value -> {
+                    if (value != null) {
+                        createOfferDraftWorkflow.setMinTradeAmountFromSliderValue(clamp(value.doubleValue()));
+                    }
+                }));
+        subscriptions.add(EasyBind.subscribe(model.getHighValue(),
+                value -> {
+                    if (value != null) {
+                        createOfferDraftWorkflow.setMaxTradeAmountFromSliderValue(clamp(value.doubleValue()));
+                    }
+                }));
+
+        pins.add(createOfferDraftWorkflow.userSpecificTradeAmountLimitAsSliderValueObservable().addObserver(value -> {
+            UIThread.run(() -> {
+                model.getMaxAllowedValue().set(value.orElse(1d));
+            });
+        }));
+
+        pins.add(FxBindings.bind(model.getLowValue())
+                .to(createOfferDraftWorkflow.minAmountSliderValueObservable()));
+        pins.add(FxBindings.bind(model.getHighValue())
+                .to(createOfferDraftWorkflow.maxAmountSliderValueObservable()));
+    }
+
+    private double clamp(double doubleValue) {
+        return Math.min(doubleValue, model.getMaxAllowedValue().get());
     }
 
     @Override
@@ -60,27 +90,5 @@ public class MuSigRangeAmountSliderController implements Controller {
         subscriptions.clear();
         pins.forEach(Pin::unbind);
         pins.clear();
-    }
-
-
-    /* --------------------------------------------------------------------- */
-    // Public API
-    /* --------------------------------------------------------------------- */
-
-
-
-    /* --------------------------------------------------------------------- */
-    // UI handlers
-    /* --------------------------------------------------------------------- */
-
-
-    double onGetMaxAllowedSliderValue() {
-        return  1;
-      /*  MonetaryRange rangeQuoteSideAmount = model.getRangeQuoteSideAmount().get();
-        if (rangeQuoteSideAmount == null) {
-            return 0;
-        }
-        Monetary maxRangeQuoteSideAmount = rangeQuoteSideAmount.getMax();
-        return getSliderValue(maxRangeQuoteSideAmount.getValue());*/
     }
 }

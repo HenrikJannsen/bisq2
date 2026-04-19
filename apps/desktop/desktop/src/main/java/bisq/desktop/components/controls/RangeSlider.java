@@ -46,4 +46,12 @@ public class RangeSlider extends Control {
     protected Skin<?> createDefaultSkin() {
         return new bisq.desktop.components.controls.skins.RangeSliderSkin(this);
     }
+
+    public final void setLowValue(double value) {
+        if (!lowValue.isBound()) lowValue.set(value);
+    }
+
+    public final void setHighValue(double value) {
+        if (!highValue.isBound()) highValue.set(value);
+    }
 }

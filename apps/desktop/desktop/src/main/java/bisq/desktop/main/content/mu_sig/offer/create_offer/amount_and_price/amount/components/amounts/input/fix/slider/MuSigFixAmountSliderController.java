@@ -52,9 +52,7 @@ public class MuSigFixAmountSliderController implements Controller {
         subscriptions.add(EasyBind.subscribe(model.getGetSliderValue(),
                 value -> {
                     if (value != null) {
-                        double doubleValue = value.doubleValue();
-                        doubleValue = Math.min(doubleValue, model.getMaxAllowedValue().get());
-                        createOfferDraftWorkflow.setFixTradeAmountFromSliderValue(doubleValue);
+                        createOfferDraftWorkflow.setFixTradeAmountFromSliderValue(clamp(value.doubleValue()));
                     }
                 }));
 
@@ -76,4 +74,7 @@ public class MuSigFixAmountSliderController implements Controller {
         pins.clear();
     }
 
+    private double clamp(double doubleValue) {
+        return Math.min(doubleValue, model.getMaxAllowedValue().get());
+    }
 }

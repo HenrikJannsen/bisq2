@@ -105,4 +105,11 @@ public abstract class ReadOnlyCreateOfferDraft extends ReadOnlyOfferDraft {
 
     public abstract Double getFixAmountSliderValue();
 
+    public abstract ReadOnlyObservable<Double> minAmountSliderValueObservable();
+
+    public abstract Double getMinAmountSliderValue();
+
+    public abstract ReadOnlyObservable<Double> maxAmountSliderValueObservable();
+
+    public abstract Double getMaxAmountSliderValue();
 }

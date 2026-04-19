@@ -389,5 +389,42 @@ public class CreateOfferDraft extends ReadOnlyCreateOfferDraft {
         return fixAmountSliderValue.get();
     }
 
+    /* --------------------------------------------------------------------- */
+    // minAmountSliderValue
+    /* --------------------------------------------------------------------- */
+
+    void setMinAmountSliderValue(double sliderValue) {
+        this.minAmountSliderValue.set(sliderValue);
+    }
+
+    @Override
+    public ReadOnlyObservable<Double> minAmountSliderValueObservable() {
+        return minAmountSliderValue;
+    }
+
+    @Override
+    public Double getMinAmountSliderValue() {
+        return minAmountSliderValue.get();
+    }
+
+
+    /* --------------------------------------------------------------------- */
+    // maxAmountSliderValue
+    /* --------------------------------------------------------------------- */
+
+    void setMaxAmountSliderValue(double sliderValue) {
+        this.maxAmountSliderValue.set(sliderValue);
+    }
+
+    @Override
+    public ReadOnlyObservable<Double> maxAmountSliderValueObservable() {
+        return maxAmountSliderValue;
+    }
+
+    @Override
+    public Double getMaxAmountSliderValue() {
+        return maxAmountSliderValue.get();
+    }
+
 
 }

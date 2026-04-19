@@ -19,79 +19,60 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 
 import bisq.desktop.common.view.View;
 import bisq.desktop.components.controls.RangeSlider;
-import javafx.beans.value.ChangeListener;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.layout.VBox;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.easybind.EasyBind;
 import org.fxmisc.easybind.Subscription;
 
+import java.util.HashSet;
+import java.util.Set;
+
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.SliderTrackStyleHelper.getSliderTrackStyle;
+
 @Slf4j
 public class MuSigRangeAmountSliderView extends View<VBox, MuSigRangeAmountSliderModel, MuSigRangeAmountSliderController> {
-    private final ChangeListener<Number> maxOrFixedAmountSliderValueListener, minAmountSliderValueListener;
     private final RangeSlider rangeAmountSlider;
-    private Subscription  sliderTrackStylePin;
+    private final Set<Subscription> subscriptions = new HashSet<>();
 
     public MuSigRangeAmountSliderView(MuSigRangeAmountSliderModel model,
                                       MuSigRangeAmountSliderController controller) {
         super(new VBox(10), model, controller);
 
         rangeAmountSlider = new RangeSlider();
-        rangeAmountSlider.setMin(model.getSliderMin());
-        rangeAmountSlider.setMax(model.getSliderMax());
-        rangeAmountSlider.getStyleClass().add("amount-range-slider");
+        rangeAmountSlider.setMin(0);
+        rangeAmountSlider.setMax(1);
+        rangeAmountSlider.setMaxWidth(300);
 
-
-        VBox sliderBox = new VBox( rangeAmountSlider);
-        sliderBox.setMaxWidth(model.getAmountBoxWidth() + 40);
-
-        VBox.setMargin(sliderBox, new Insets(30, 0, 0, 0));
-        root.getChildren().addAll(sliderBox);
-        root.setAlignment(Pos.TOP_CENTER);
-
-        maxOrFixedAmountSliderValueListener = (observable, oldValue, newValue) -> {
-            double maxAllowedSliderValue = controller.onGetMaxAllowedSliderValue();
-            rangeAmountSlider.getHighValue().set(Math.min(newValue.doubleValue(), maxAllowedSliderValue));
-        };
-        minAmountSliderValueListener = (observable, oldValue, newValue) -> {
-            double maxAllowedSliderValue = controller.onGetMaxAllowedSliderValue();
-            rangeAmountSlider.getLowValue().set(Math.min(newValue.doubleValue(), maxAllowedSliderValue));
-        };
+        root.getChildren().add(rangeAmountSlider);
     }
 
     @Override
     protected void onViewAttached() {
-        sliderTrackStylePin = EasyBind.subscribe(model.getSliderTrackStyle(), trackStyle -> {
-            rangeAmountSlider.setStyle(trackStyle);
-        });
+        rangeAmountSlider.getLowValue().bindBidirectional(model.getLowValue());
+        rangeAmountSlider.getHighValue().bindBidirectional(model.getHighValue());
 
-        rangeAmountSlider.getLowValue().bindBidirectional(model.getMinAmountSliderValue());
-        rangeAmountSlider.getHighValue().bindBidirectional(model.getMaxOrFixedAmountSliderValue());
-        rangeAmountSlider.getLowValue().addListener(minAmountSliderValueListener);
-        rangeAmountSlider.getHighValue().addListener(maxOrFixedAmountSliderValueListener);
-        model.getRangeSliderLowThumbFocus().bind(rangeAmountSlider.getLowThumbFocused());
-        model.getRangeSliderHighThumbFocus().bind(rangeAmountSlider.getHighThumbFocused());
+        subscriptions.add(EasyBind.subscribe(rangeAmountSlider.getHighValue(), value -> {
+            double maxAllowedValue = model.getMaxAllowedValue().get();
+            if (value.doubleValue() > maxAllowedValue) {
+                rangeAmountSlider.setHighValue(maxAllowedValue);
+            }
 
-        // Needed to trigger focusOut event on amount components
-        // We handle all parents mouse events.
-      /*  Parent node = root;
-        while (node.getParent() != null) {
-            node.setOnMousePressed(e -> root.requestFocus());
-            node = node.getParent();
-        }*/
+            String style = getSliderTrackStyle(maxAllowedValue);
+            rangeAmountSlider.setStyle(style);
+        }));
+        subscriptions.add(EasyBind.subscribe(rangeAmountSlider.getLowValue(), value -> {
+            double maxAllowedValue = model.getMaxAllowedValue().get();
+            if (value.doubleValue() > maxAllowedValue) {
+                rangeAmountSlider.setLowValue(maxAllowedValue);
+            }
+        }));
     }
 
     @Override
     protected void onViewDetached() {
-        sliderTrackStylePin.unsubscribe();
-
-        rangeAmountSlider.getHighValue().unbindBidirectional(model.getMaxOrFixedAmountSliderValue());
-        rangeAmountSlider.getHighValue().removeListener(maxOrFixedAmountSliderValueListener);
-        rangeAmountSlider.getLowValue().unbindBidirectional(model.getMinAmountSliderValue());
-        rangeAmountSlider.getLowValue().removeListener(minAmountSliderValueListener);
-        model.getRangeSliderLowThumbFocus().unbind();
-        model.getRangeSliderHighThumbFocus().unbind();
-        model.getMaxOrFixedAmountSliderFocus().unbind();
+        subscriptions.forEach(Subscription::unsubscribe);
+        subscriptions.clear();
+        rangeAmountSlider.getLowValue().unbindBidirectional(model.getLowValue());
+        rangeAmountSlider.getHighValue().unbindBidirectional(model.getHighValue());
     }
 }

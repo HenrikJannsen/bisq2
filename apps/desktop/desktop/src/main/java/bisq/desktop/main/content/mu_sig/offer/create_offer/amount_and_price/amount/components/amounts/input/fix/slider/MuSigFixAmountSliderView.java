@@ -27,11 +27,10 @@ import org.fxmisc.easybind.Subscription;
 import java.util.HashSet;
 import java.util.Set;
 
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.SliderTrackStyleHelper.getSliderTrackStyle;
+
 @Slf4j
 public class MuSigFixAmountSliderView extends View<VBox, MuSigFixAmountSliderModel, MuSigFixAmountSliderController> {
-    private static final String SLIDER_TRACK_DEFAULT_COLOR = "-bisq-dark-grey-50";
-    private static final String SLIDER_TRACK_MARKER_COLOR = "-bisq2-green";
-
     private final Slider slider;
     private final Set<Subscription> subscriptions = new HashSet<>();
 
@@ -54,7 +53,8 @@ public class MuSigFixAmountSliderView extends View<VBox, MuSigFixAmountSliderMod
                 slider.setValue(maxAllowedValue);
             }
 
-            applySliderTrackStyle(maxAllowedValue);
+            String style = getSliderTrackStyle(maxAllowedValue);
+            slider.setStyle(style);
         }));
     }
 
@@ -63,55 +63,5 @@ public class MuSigFixAmountSliderView extends View<VBox, MuSigFixAmountSliderMod
         subscriptions.forEach(Subscription::unsubscribe);
         subscriptions.clear();
         slider.valueProperty().unbindBidirectional(model.getGetSliderValue());
-    }
-
-    /**
-     * Defines a horizontal linear gradient used to simulate a "filled" portion
-     * of a JavaFX Slider track.
-     * <p>
-     * The gradient uses duplicated color stops at the same percentage positions
-     * to create hard transitions (no blending) between colors:
-     * <p>
-     * - From 0% to X%: filled color (-bisq2-green)
-     * - From X% to 100%: unfilled color (-bisq-dark-grey-50)
-     * <p>
-     * The value X (e.g. 1.2%) represents the current slider position as a percentage
-     * and is typically updated dynamically to reflect the slider's value.
-     * <p>
-     * This approach is used because JavaFX Slider does not provide a built-in
-     * progress/fill track visualization.
-     */
-    private void applySliderTrackStyle(double value) {
-        double rightPercentage = 0;
-        if (value < 1) {
-            rightPercentage = value * 100;
-
-            // Adjust values to match slider knob better
-            if (rightPercentage < 2) {
-                rightPercentage += 1.2;
-            } else if (rightPercentage < 8) {
-                rightPercentage += 1;
-            } else if (rightPercentage < 15) {
-                rightPercentage += 0.9;
-            } else if (rightPercentage < 24) {
-                rightPercentage += 0.7;
-            } else if (rightPercentage < 60) {
-                rightPercentage += 0.5;
-            }
-        }
-
-        // E.g.: -bisq-dark-grey-50 0%, -bisq-dark-grey-50 30.0%, -bisq2-green 30.0%, -bisq2-green 60.0%, -bisq-dark-grey-50 60.0%, -bisq-dark-grey-50 100%)
-        String segments = String.format(
-                SLIDER_TRACK_DEFAULT_COLOR + " 0%%, " +
-                        SLIDER_TRACK_DEFAULT_COLOR + " %1$.1f%%, " +
-
-                        SLIDER_TRACK_MARKER_COLOR + " %1$.1f%%, " +
-                        SLIDER_TRACK_MARKER_COLOR + " %2$.1f%%, " +
-
-                        SLIDER_TRACK_DEFAULT_COLOR + " %2$.1f%%, " +
-                        SLIDER_TRACK_DEFAULT_COLOR + " 100%%)",
-                0d, rightPercentage);
-        String style = "-track-color: linear-gradient(to right, " + segments + ";";
-        slider.setStyle(style);
     }
 }
