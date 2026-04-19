@@ -123,7 +123,7 @@ public class MuSigRangeAmountController implements Controller {
                     applySumNumChars();
                 }));
 
-        subscriptions.add(EasyBind.subscribe(model.getMinAmountWidth(), width -> {
+        subscriptions.add(EasyBind.subscribe(model.getMinAmountInputFieldWidth(), width -> {
             if (width != null) {
                 minAmountInputController.setAmountFieldWidth(width.doubleValue());
             }
@@ -133,7 +133,7 @@ public class MuSigRangeAmountController implements Controller {
                 minAmountInputController.setDashFieldWidth(width.doubleValue());
             }
         }));
-        subscriptions.add(EasyBind.subscribe(model.getMaxAmountWidth(), width -> {
+        subscriptions.add(EasyBind.subscribe(model.getMaxAmountInputFieldWidth(), width -> {
             if (width != null) {
                 maxAmountInputController.setAmountFieldWidth(width.doubleValue());
             }

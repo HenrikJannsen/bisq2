@@ -64,9 +64,15 @@ public class RangeAmountLayoutHelper extends HBox {
     void onViewAttached() {
         minAmount.textProperty().bind(model.getMinAmountInputText());
         maxAmount.textProperty().bind(model.getMaxAmountInputText());
-        model.getMinAmountWidth().bind(minAmount.layoutBoundsProperty().map(Bounds::getWidth));
         model.getDashWidth().bind(dash.layoutBoundsProperty().map(Bounds::getWidth));
-        model.getMaxAmountWidth().bind(maxAmount.layoutBoundsProperty().map(Bounds::getWidth));
+
+        // Add 2 px for cursor
+        model.getMinAmountInputFieldWidth().bind(minAmount.layoutBoundsProperty()
+                .map(Bounds::getWidth)
+                .map(width -> width + 2));
+        model.getMaxAmountInputFieldWidth().bind(maxAmount.layoutBoundsProperty()
+                .map(Bounds::getWidth)
+                .map(width -> width + 2));
 
         subscriptions.add(EasyBind.subscribe(model.getSumOfNumChars(), sumOfNumChars -> {
             if (sumOfNumChars != null) {
@@ -80,9 +86,9 @@ public class RangeAmountLayoutHelper extends HBox {
         subscriptions.clear();
         minAmount.textProperty().unbind();
         maxAmount.textProperty().unbind();
-        model.getMinAmountWidth().unbind();
+        model.getMinAmountInputFieldWidth().unbind();
         model.getDashWidth().unbind();
-        model.getMaxAmountWidth().unbind();
+        model.getMaxAmountInputFieldWidth().unbind();
     }
 
     private void updateFontsize(int length) {

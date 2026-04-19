@@ -58,7 +58,10 @@ public class FixAmountLayoutHelper extends HBox {
 
     void onViewAttached() {
         amount.textProperty().bind(model.getAmountInputText());
-        model.getAmountInputFieldWidth().bind(amount.layoutBoundsProperty().map(Bounds::getWidth));
+        // Add 2 px for cursor
+        model.getAmountInputFieldWidth().bind(amount.layoutBoundsProperty()
+                .map(Bounds::getWidth)
+                .map(width -> width + 2));
 
         subscriptions.add(EasyBind.subscribe(model.getSumOfNumChars(), sumOfNumChars -> {
             if (sumOfNumChars != null) {
