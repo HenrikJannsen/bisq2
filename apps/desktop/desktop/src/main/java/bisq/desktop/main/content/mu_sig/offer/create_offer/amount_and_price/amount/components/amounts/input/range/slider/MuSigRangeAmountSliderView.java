@@ -19,7 +19,7 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 
 import bisq.desktop.common.view.View;
 import bisq.desktop.components.controls.RangeSlider;
-import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants;
 import javafx.scene.layout.HBox;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.easybind.EasyBind;
@@ -42,8 +42,8 @@ public class MuSigRangeAmountSliderView extends View<HBox, MuSigRangeAmountSlide
         slider = new RangeSlider();
         slider.setMin(0);
         slider.setMax(1);
-        slider.setMinWidth(AmountTextInputLayout.WIDTH);
-        slider.setMaxWidth(AmountTextInputLayout.WIDTH);
+        slider.setMinWidth(MuSigAmountLayoutConstants.WIDTH);
+        slider.setMaxWidth(MuSigAmountLayoutConstants.WIDTH);
 
         root.getChildren().add(slider);
     }

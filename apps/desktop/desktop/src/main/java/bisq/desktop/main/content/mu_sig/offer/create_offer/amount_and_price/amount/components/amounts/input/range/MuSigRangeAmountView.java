@@ -20,6 +20,7 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 import bisq.desktop.common.view.View;
 import bisq.desktop.components.containers.Spacer;
 import bisq.desktop.components.controls.BisqMenuItem;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants;
 import bisq.i18n.Res;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -32,8 +33,8 @@ import org.fxmisc.easybind.Subscription;
 import java.util.HashSet;
 import java.util.Set;
 
-import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout.PADDING;
-import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout.WIDTH;
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants.PADDING;
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants.WIDTH;
 
 @Slf4j
 public class MuSigRangeAmountView extends View<VBox, MuSigRangeAmountModel, MuSigRangeAmountController> {
@@ -52,6 +53,8 @@ public class MuSigRangeAmountView extends View<VBox, MuSigRangeAmountModel, MuSi
         super(new VBox(), model, controller);
 
         root.setAlignment(Pos.TOP_CENTER);
+        root.setMinWidth(MuSigAmountLayoutConstants.WIDTH);
+        root.setMaxWidth(MuSigAmountLayoutConstants.WIDTH);
 
         layoutHelper = new RangeAmountLayoutHelper(model);
         layoutHelper.setVisible(false);

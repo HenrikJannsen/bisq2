@@ -32,10 +32,11 @@ import org.fxmisc.easybind.Subscription;
 import java.util.HashSet;
 import java.util.Set;
 
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants.WIDTH;
+
 @Slf4j
 public class MuSigAmountComponentsView extends View<VBox, MuSigAmountComponentsModel, MuSigAmountComponentsController> {
-    private static final int WIDTH = 340;
-    public static final int HEIGHT = 127;
+    private static final int HEIGHT = 127;
 
     private final Label description;
     private final Region selectionLine;

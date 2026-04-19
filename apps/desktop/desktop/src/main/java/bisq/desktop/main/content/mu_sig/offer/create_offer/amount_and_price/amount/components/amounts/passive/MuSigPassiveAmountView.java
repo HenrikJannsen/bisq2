@@ -57,7 +57,6 @@ public class MuSigPassiveAmountView extends bisq.desktop.common.view.View<HBox, 
         code = new Label();
         code.getStyleClass().add("code");
 
-
         Label infoIcon = new Label();
         infoIcon.setGraphic(ImageUtil.getImageViewById("info"));
         infoIcon.setScaleX(ICON_SCALE);
@@ -79,6 +78,7 @@ public class MuSigPassiveAmountView extends bisq.desktop.common.view.View<HBox, 
 
             Label dash2 = createDash();
             dash2.setTranslateY(-1);
+
             bitcoinAmountDisplayBox.getChildren().add(dash2);
         } else {
             tooltip = new BisqTooltip(BisqTooltip.Style.DARK);

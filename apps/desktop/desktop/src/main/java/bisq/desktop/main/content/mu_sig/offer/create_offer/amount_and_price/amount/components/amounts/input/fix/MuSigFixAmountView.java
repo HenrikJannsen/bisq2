@@ -32,8 +32,8 @@ import org.fxmisc.easybind.Subscription;
 import java.util.HashSet;
 import java.util.Set;
 
-import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout.PADDING;
-import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout.WIDTH;
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants.PADDING;
+import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants.WIDTH;
 
 @Slf4j
 public class MuSigFixAmountView extends View<VBox, MuSigFixAmountModel, MuSigFixAmountController> {

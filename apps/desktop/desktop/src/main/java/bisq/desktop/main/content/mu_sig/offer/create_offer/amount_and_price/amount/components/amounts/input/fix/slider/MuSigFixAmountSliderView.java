@@ -18,7 +18,7 @@
 package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.fix.slider;
 
 import bisq.desktop.common.view.View;
-import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.MuSigAmountLayoutConstants;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.VBox;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +41,8 @@ public class MuSigFixAmountSliderView extends View<VBox, MuSigFixAmountSliderMod
 
         slider = new Slider(0, 1, 0);
         slider.getStyleClass().add("fixed-amount-slider");
-        slider.setMinWidth(AmountTextInputLayout.WIDTH);
-        slider.setMaxWidth(AmountTextInputLayout.WIDTH);
+        slider.setMinWidth(MuSigAmountLayoutConstants.WIDTH);
+        slider.setMaxWidth(MuSigAmountLayoutConstants.WIDTH);
 
         root.getChildren().add(slider);
     }
