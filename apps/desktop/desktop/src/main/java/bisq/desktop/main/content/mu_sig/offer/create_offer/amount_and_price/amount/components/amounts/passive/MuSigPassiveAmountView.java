@@ -69,7 +69,7 @@ public class MuSigPassiveAmountView extends bisq.desktop.common.view.View<HBox, 
         bitcoinAmountDisplay.setTextAlignment(TextAlignment.LEFT);
         bitcoinAmountDisplay.applyCompactConfig(15, 12, 28);
 
-         bitcoinAmountDisplayBox = new HBox(7.5, bitcoinAmountDisplay);
+        bitcoinAmountDisplayBox = new HBox(7.5, bitcoinAmountDisplay);
 
         HBox.setMargin(amount, new Insets(0, 0, 3, 0));
         if (isLeftSideRangeAmount) {

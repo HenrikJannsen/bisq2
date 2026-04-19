@@ -17,6 +17,7 @@
 
 package bisq.desktop.components.controls;
 
+import bisq.desktop.components.controls.skins.RangeSliderSkin;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -44,7 +45,7 @@ public class RangeSlider extends Control {
 
     @Override
     protected Skin<?> createDefaultSkin() {
-        return new bisq.desktop.components.controls.skins.RangeSliderSkin(this);
+        return new RangeSliderSkin(this);
     }
 
     public final void setLowValue(double value) {

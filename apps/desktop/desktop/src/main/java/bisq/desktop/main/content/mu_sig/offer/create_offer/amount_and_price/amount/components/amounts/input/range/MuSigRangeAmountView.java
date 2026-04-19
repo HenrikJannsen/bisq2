@@ -47,7 +47,7 @@ public class MuSigRangeAmountView extends View<VBox, MuSigRangeAmountModel, MuSi
                                 HBox maxAmountInput,
                                 HBox minPassiveAmount,
                                 HBox maxPassiveAmount,
-                                VBox amountSlider,
+                                HBox amountSlider,
                                 HBox amountLimits) {
         super(new VBox(), model, controller);
 
@@ -72,7 +72,7 @@ public class MuSigRangeAmountView extends View<VBox, MuSigRangeAmountModel, MuSi
         Pane amountInputHBoxPane = new Pane(layoutHelper, amountInputHBox);
 
         VBox.setMargin(amountSlider, new Insets(32.5, 0, 0, 0));
-        VBox.setMargin(amountLimits, new Insets(4.5, 0, 0, 0));
+        VBox.setMargin(amountLimits, new Insets(-12.5, 0, 0, 0));
         root.getChildren().addAll(amountInputHBoxPane, passiveAmountAndToggle, amountSlider, amountLimits);
     }
 

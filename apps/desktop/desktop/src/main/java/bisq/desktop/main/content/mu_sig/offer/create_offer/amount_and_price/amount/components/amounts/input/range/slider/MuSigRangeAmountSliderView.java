@@ -19,7 +19,8 @@ package bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amo
 
 import bisq.desktop.common.view.View;
 import bisq.desktop.components.controls.RangeSlider;
-import javafx.scene.layout.VBox;
+import bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.AmountTextInputLayout;
+import javafx.scene.layout.HBox;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.easybind.EasyBind;
 import org.fxmisc.easybind.Subscription;
@@ -30,40 +31,41 @@ import java.util.Set;
 import static bisq.desktop.main.content.mu_sig.offer.create_offer.amount_and_price.amount.components.amounts.input.SliderTrackStyleHelper.getSliderTrackStyle;
 
 @Slf4j
-public class MuSigRangeAmountSliderView extends View<VBox, MuSigRangeAmountSliderModel, MuSigRangeAmountSliderController> {
-    private final RangeSlider rangeAmountSlider;
+public class MuSigRangeAmountSliderView extends View<HBox, MuSigRangeAmountSliderModel, MuSigRangeAmountSliderController> {
+    private final RangeSlider slider;
     private final Set<Subscription> subscriptions = new HashSet<>();
 
     public MuSigRangeAmountSliderView(MuSigRangeAmountSliderModel model,
                                       MuSigRangeAmountSliderController controller) {
-        super(new VBox(10), model, controller);
+        super(new HBox(10), model, controller);
 
-        rangeAmountSlider = new RangeSlider();
-        rangeAmountSlider.setMin(0);
-        rangeAmountSlider.setMax(1);
-        rangeAmountSlider.setMaxWidth(300);
+        slider = new RangeSlider();
+        slider.setMin(0);
+        slider.setMax(1);
+        slider.setMinWidth(AmountTextInputLayout.WIDTH);
+        slider.setMaxWidth(AmountTextInputLayout.WIDTH);
 
-        root.getChildren().add(rangeAmountSlider);
+        root.getChildren().add(slider);
     }
 
     @Override
     protected void onViewAttached() {
-        rangeAmountSlider.getLowValue().bindBidirectional(model.getLowValue());
-        rangeAmountSlider.getHighValue().bindBidirectional(model.getHighValue());
+        slider.getLowValue().bindBidirectional(model.getLowValue());
+        slider.getHighValue().bindBidirectional(model.getHighValue());
 
-        subscriptions.add(EasyBind.subscribe(rangeAmountSlider.getHighValue(), value -> {
+        subscriptions.add(EasyBind.subscribe(slider.getHighValue(), value -> {
             double maxAllowedValue = model.getMaxAllowedValue().get();
             if (value.doubleValue() > maxAllowedValue) {
-                rangeAmountSlider.setHighValue(maxAllowedValue);
+                slider.setHighValue(maxAllowedValue);
             }
 
             String style = getSliderTrackStyle(maxAllowedValue);
-            rangeAmountSlider.setStyle(style);
+            slider.setStyle(style);
         }));
-        subscriptions.add(EasyBind.subscribe(rangeAmountSlider.getLowValue(), value -> {
+        subscriptions.add(EasyBind.subscribe(slider.getLowValue(), value -> {
             double maxAllowedValue = model.getMaxAllowedValue().get();
             if (value.doubleValue() > maxAllowedValue) {
-                rangeAmountSlider.setLowValue(maxAllowedValue);
+                slider.setLowValue(maxAllowedValue);
             }
         }));
     }
@@ -72,7 +74,7 @@ public class MuSigRangeAmountSliderView extends View<VBox, MuSigRangeAmountSlide
     protected void onViewDetached() {
         subscriptions.forEach(Subscription::unsubscribe);
         subscriptions.clear();
-        rangeAmountSlider.getLowValue().unbindBidirectional(model.getLowValue());
-        rangeAmountSlider.getHighValue().unbindBidirectional(model.getHighValue());
+        slider.getLowValue().unbindBidirectional(model.getLowValue());
+        slider.getHighValue().unbindBidirectional(model.getHighValue());
     }
 }
