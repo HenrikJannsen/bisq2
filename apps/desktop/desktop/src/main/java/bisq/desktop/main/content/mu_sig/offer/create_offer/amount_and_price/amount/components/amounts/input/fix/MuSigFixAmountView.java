@@ -68,7 +68,8 @@ public class MuSigFixAmountView extends View<VBox, MuSigFixAmountModel, MuSigFix
 
         Pane amountInputHBoxPane = new Pane(layoutHelper, amountInput);
 
-        VBox.setMargin(amountSlider, new Insets(40, 0, 0, 0));
+        VBox.setMargin(amountSlider, new Insets(32.5, 0, 0, 0));
+        VBox.setMargin(amountLimits, new Insets(4.5, 0, 0, 0));
         root.getChildren().addAll(amountInputHBoxPane, passiveAmountAndToggle, amountSlider, amountLimits);
     }
 

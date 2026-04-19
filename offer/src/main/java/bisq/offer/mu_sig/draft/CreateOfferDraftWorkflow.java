@@ -100,6 +100,9 @@ public class CreateOfferDraftWorkflow extends OfferDraftWorkflow<CreateOfferDraf
         updateUserSpecificTradeAmountLimit();
         updateUserSpecificTradeAmountLimitAsSliderValue();
         updateInputAmountLimits();
+        updateFixAmountSliderValue();
+        updateMinAmountSliderValue();
+        updateMaxAmountSliderValue();
     }
 
     @Override

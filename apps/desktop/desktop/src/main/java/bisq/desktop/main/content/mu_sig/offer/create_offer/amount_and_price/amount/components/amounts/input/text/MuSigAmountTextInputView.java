@@ -80,6 +80,7 @@ public class MuSigAmountTextInputView extends View<HBox, MuSigAmountTextInputMod
         BaselineHBox textInputNode = new BaselineHBox(textField, baseline);
         if (model.isLeftSideRangeAmount()) {
             BaselineHBox dashNode = new BaselineHBox(dash, baseline);
+            HBox.setMargin(dashNode, new Insets(0, 3, 0, -2));
             root.getChildren().addAll(textInputNode, dashNode);
         } else {
             BaselineHBox codeLabelNode = new BaselineHBox(codeLabel, baseline);
