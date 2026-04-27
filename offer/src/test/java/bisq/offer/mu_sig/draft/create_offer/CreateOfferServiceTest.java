@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class CreateOfferDraftWorkflowTest {
+public class CreateOfferServiceTest {
     private Market defaultMarket;
     private Market usdBtcMarket;
     private Market xmrBtcMarket;
@@ -54,7 +54,7 @@ public class CreateOfferDraftWorkflowTest {
     private MockMarketPriceService marketPriceService;
     private FakeCookieStore cookieStore;
     private FakeAccountsProvider accountsProvider;
-    private CreateOfferDraftWorkflow workflow;
+    private CreateService workflow;
     private CreateOfferPaymentMethodService paymentMethodDraftFacade;
     private CreateOfferDirectionService createOfferDirectionService;
     private CreateOfferPriceService createOfferPriceService;
@@ -87,7 +87,7 @@ public class CreateOfferDraftWorkflowTest {
 
         cookieStore = new FakeCookieStore(Direction.SELL, false, true, false);
         accountsProvider = new FakeAccountsProvider();
-        workflow = new CreateOfferDraftWorkflow(marketPriceService, cookieStore, accountsProvider);
+        workflow = new CreateService(marketPriceService, cookieStore, accountsProvider);
         paymentMethodDraftFacade = workflow.getPaymentMethodService();
         createOfferDirectionService = workflow.getDirectionService();
         createOfferPriceService = workflow.getPriceService();
