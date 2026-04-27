@@ -25,6 +25,7 @@ import bisq.common.monetary.TradeAmount;
 import bisq.common.monetary.TradeAmountRange;
 import bisq.offer.amount.spec.AmountSpec;
 import bisq.offer.amount.spec.AmountSpecFactory;
+import bisq.offer.mu_sig.draft.AmountMappingService;
 import bisq.offer.mu_sig.draft.AmountUtils;
 import bisq.offer.mu_sig.draft.TradeAmountLimits;
 import bisq.offer.mu_sig.draft.dependencies.CreateOfferDraftCookieStore;
@@ -44,10 +45,14 @@ public class CreateOfferAmountService {
     private final CreateOfferAmountModel model;
     private final MarketPriceService marketPriceService;
     private final CreateOfferDraftCookieStore cookieStore;
+    private final AmountMappingService amountMappingService;
 
-    public CreateOfferAmountService(MarketPriceService marketPriceService, CreateOfferDraftCookieStore cookieStore) {
+    public CreateOfferAmountService(MarketPriceService marketPriceService,
+                                    CreateOfferDraftCookieStore cookieStore,
+                                    AmountMappingService amountMappingService) {
         this.marketPriceService = marketPriceService;
         this.cookieStore = cookieStore;
+        this.amountMappingService = amountMappingService;
         this.model = new CreateOfferAmountModel();
     }
 
@@ -103,16 +108,32 @@ public class CreateOfferAmountService {
         model.setUseRangeAmount(useRangeAmount);
     }
 
-    public void setFixTradeAmount(TradeAmount fixTradeAmount) {
-        model.setFixTradeAmount(fixTradeAmount);
+
+    public  void setFixTradeAmount(TradeAmount tradeAmount) {
+        checkNotNull(tradeAmount, "tradeAmount must not be null");
+        TradeAmount valueToSet = isDerivedStateInitialized() ? clampTradeAmount(tradeAmount, true) : tradeAmount;
+        model.setFixTradeAmount(valueToSet);
+        if (isDerivedStateInitialized()) {
+            updateFixAmountSliderValue();
+        }
     }
 
-    public void setMinTradeAmount(TradeAmount minTradeAmount) {
-        model.setMinTradeAmount(minTradeAmount);
+    public  void setMinTradeAmount(TradeAmount tradeAmount) {
+        checkNotNull(tradeAmount, "tradeAmount must not be null");
+        TradeAmount valueToSet = isDerivedStateInitialized() ? clampTradeAmount(tradeAmount, true) : tradeAmount;
+        model.setMinTradeAmount(valueToSet);
+        if (isDerivedStateInitialized()) {
+            updateMinAmountSliderValue();
+        }
     }
 
-    public void setMaxTradeAmount(TradeAmount maxTradeAmount) {
-        model.setMaxTradeAmount(maxTradeAmount);
+    public  void setMaxTradeAmount(TradeAmount tradeAmount) {
+        checkNotNull(tradeAmount, "tradeAmount must not be null");
+        TradeAmount valueToSet = isDerivedStateInitialized() ? clampTradeAmount(tradeAmount, true) : tradeAmount;
+        model.setMaxTradeAmount(valueToSet);
+        if (isDerivedStateInitialized()) {
+            updateMaxAmountSliderValue();
+        }
     }
 
     public void setUserSpecificTradeAmountLimit(Optional<TradeAmount> userSpecificTradeAmountLimit) {
@@ -157,4 +178,42 @@ public class CreateOfferAmountService {
                 getMaxTradeAmount(),
                 getFixTradeAmount());
     }
+
+    public void updateAmountSliderValues() {
+        if (getFixTradeAmount() != null) {
+            updateFixAmountSliderValue();
+        }
+        if (getMinTradeAmount() != null) {
+            updateMinAmountSliderValue();
+        }
+        if (getMaxTradeAmount() != null) {
+            updateMaxAmountSliderValue();
+        }
+    }
+
+    public void updateFixAmountSliderValue() {
+        double sliderValue = toSliderValue(getFixTradeAmount());
+        setFixAmountSliderValue(sliderValue);
+    }
+
+    public void updateMinAmountSliderValue() {
+        double sliderValue = toSliderValue(getMinTradeAmount());
+        setMinAmountSliderValue(sliderValue);
+    }
+
+    public void updateMaxAmountSliderValue() {
+        double sliderValue = toSliderValue(getMaxTradeAmount());
+        setMaxAmountSliderValue(sliderValue);
+    }
+
+    public double toSliderValue(TradeAmount tradeAmount) {
+        TradeAmountRange limits = getClampLimits(true);
+        MonetaryRange inputAmountLimits = checkNotNull(getInputAmountLimits(), "inputAmountLimits must not be null");
+        return amountMappingService.toSliderValue(tradeAmount,
+                limits,
+                inputAmountLimits,
+                getUseBaseCurrencyForAmountInput());
+    }
+
+
 }
