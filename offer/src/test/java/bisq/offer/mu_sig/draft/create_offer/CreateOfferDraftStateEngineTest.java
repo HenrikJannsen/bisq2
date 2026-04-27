@@ -2,6 +2,7 @@ package bisq.offer.mu_sig.draft.create_offer;
 
 import bisq.account.accounts.Account;
 import bisq.account.payment_method.PaymentMethod;
+import bisq.account.payment_method.PaymentRail;
 import bisq.account.payment_method.fiat.FiatPaymentMethod;
 import bisq.account.payment_method.fiat.FiatPaymentRail;
 import bisq.bonded_roles.bonded_role.AuthorizedBondedRole;
@@ -162,10 +163,10 @@ public class CreateOfferDraftStateEngineTest {
         createOfferAmountService.initialize(market);
     }
 
-    @SuppressWarnings("unchecked")
-    private static Account<?, ?> createAccount(PaymentMethod<?> paymentMethod) {
-        Account<?, ?> account = mock(Account.class);
-        when(account.getPaymentMethod()).thenReturn((PaymentMethod) paymentMethod);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <R extends PaymentRail> Account<?, ?> createAccount(PaymentMethod<R> paymentMethod) {
+        Account<PaymentMethod<R>, ?> account = (Account<PaymentMethod<R>, ?>) mock(Account.class);
+        when(account.getPaymentMethod()).thenReturn(paymentMethod);
         return account;
     }
 
