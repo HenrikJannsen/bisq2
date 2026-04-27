@@ -34,6 +34,7 @@ import lombok.experimental.Delegate;
 
 import java.util.Optional;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class CreateOfferAmountService {
@@ -64,17 +65,34 @@ public class CreateOfferAmountService {
         setMaxTradeAmount(defaultTradeAmount);
     }
 
-    private TradeAmount clampTradeAmount(TradeAmount tradeAmount, boolean includeUserSpecificTradeAmountLimit) {
+    public TradeAmount clampTradeAmount(TradeAmount tradeAmount, boolean includeUserSpecificTradeAmountLimit) {
+        checkNotNull(tradeAmount, "tradeAmount must not be null");
         TradeAmountRange limits = getClampLimits(includeUserSpecificTradeAmountLimit);
         return TradeAmountLimits.clampTradeAmount(limits, tradeAmount);
     }
 
-    private TradeAmountRange getClampLimits(boolean includeUserSpecificTradeAmountLimit) {
+    public TradeAmountRange getClampLimits(boolean includeUserSpecificTradeAmountLimit) {
         TradeAmountRange tradeAmountLimits = getTradeAmountLimits();
         Optional<TradeAmount> userSpecificTradeAmountLimit = getUserSpecificTradeAmountLimit();
         return TradeAmountLimits.getClampLimits(tradeAmountLimits,
                 userSpecificTradeAmountLimit,
                 includeUserSpecificTradeAmountLimit);
+    }
+
+    public boolean isDerivedStateInitialized() {
+        return getTradeAmountLimits() != null && getInputAmountLimits() != null;
+    }
+
+    public void clampCurrentTradeAmounts(boolean includeUserSpecificTradeAmountLimit) {
+        if (getFixTradeAmount() != null) {
+            setFixTradeAmount(clampTradeAmount(getFixTradeAmount(), includeUserSpecificTradeAmountLimit));
+        }
+        if (getMinTradeAmount() != null) {
+            setMinTradeAmount(clampTradeAmount(getMinTradeAmount(), includeUserSpecificTradeAmountLimit));
+        }
+        if (getMaxTradeAmount() != null) {
+            setMaxTradeAmount(clampTradeAmount(getMaxTradeAmount(), includeUserSpecificTradeAmountLimit));
+        }
     }
 
     public void setUseBaseCurrencyForAmountInput(boolean value) {
@@ -102,6 +120,7 @@ public class CreateOfferAmountService {
     }
 
     public void setUserSpecificTradeAmountLimitAsSliderValue(Optional<Double> sliderValue) {
+        sliderValue.ifPresent(value -> checkArgument(value >= 0 && value <= 1, "value must be in range of 0 and 1"));
         model.setUserSpecificTradeAmountLimitAsSliderValue(sliderValue);
     }
 
@@ -114,14 +133,17 @@ public class CreateOfferAmountService {
     }
 
     public void setFixAmountSliderValue(double sliderValue) {
+        checkArgument(sliderValue >= 0 && sliderValue <= 1, "sliderValue must be in range of 0 and 1");
         model.setFixAmountSliderValue(sliderValue);
     }
 
     public void setMinAmountSliderValue(double sliderValue) {
+        checkArgument(sliderValue >= 0 && sliderValue <= 1, "sliderValue must be in range of 0 and 1");
         model.setMinAmountSliderValue(sliderValue);
     }
 
     public void setMaxAmountSliderValue(double sliderValue) {
+        checkArgument(sliderValue >= 0 && sliderValue <= 1, "sliderValue must be in range of 0 and 1");
         model.setMaxAmountSliderValue(sliderValue);
     }
 
