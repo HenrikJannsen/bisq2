@@ -54,9 +54,9 @@ public class CreateOfferDraftStateEngineTest {
                 Fiat.fromFaceValue(500, "USD"));
 
         createOfferMarketService = new CreateOfferMarketService();
-        createOfferDirectionService = new CreateOfferDirectionService();
-        createOfferPriceService = new CreateOfferPriceService();
-        createOfferAmountService = new CreateOfferAmountService();
+        createOfferDirectionService = new CreateOfferDirectionService(cookieStore);
+        createOfferPriceService = new CreateOfferPriceService(marketPriceService, cookieStore);
+        createOfferAmountService = new CreateOfferAmountService(cookieStore);
         marketPriceService = new MockMarketPriceService(usdBtcPriceQuote);
         marketPriceService.put(usdBtcMarket, usdBtcPriceQuote, usdBtcDefaultTradeAmount);
 
