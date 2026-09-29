@@ -26,7 +26,6 @@ import bisq.common.application.Service;
 import bisq.common.data.ByteArray;
 import bisq.common.observable.collection.ObservableSet;
 import bisq.common.threading.ExecutorFactory;
-import bisq.identity.Identity;
 import bisq.identity.IdentityService;
 import bisq.network.NetworkService;
 import bisq.network.identity.NetworkId;
@@ -36,16 +35,21 @@ import bisq.network.p2p.node.Connection;
 import bisq.network.p2p.node.Node;
 import bisq.network.p2p.services.data.DataService;
 import bisq.network.p2p.services.data.storage.PublishDateAware;
+import bisq.network.p2p.services.data.storage.auth.AddAuthenticatedDataRequest;
 import bisq.network.p2p.services.data.storage.auth.AuthenticatedData;
+import bisq.network.p2p.services.data.storage.auth.AuthenticatedDataRequest;
+import bisq.network.p2p.services.data.storage.auth.AuthenticatedSequentialData;
 import bisq.network.p2p.services.data.storage.auth.authorized.AuthorizedData;
 import bisq.network.p2p.services.data.storage.auth.authorized.AuthorizedDistributedData;
 import bisq.oracle_node.bisq1_bridge.grpc.GrpcClient;
 import bisq.oracle_node.bisq1_bridge.grpc.services.BsqBlockGrpcService;
 import bisq.oracle_node.bisq1_bridge.grpc.services.BurningmanGrpcService;
 import bisq.persistence.PersistenceService;
+import bisq.security.DigestUtil;
 import bisq.user.profile.UserProfile;
 import bisq.user.reputation.data.AuthorizedBondedReputationData;
 import bisq.user.reputation.data.AuthorizedProofOfBurnData;
+import com.google.common.annotations.VisibleForTesting;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -69,6 +73,8 @@ import java.util.stream.Collectors;
  * will get re-evaluated at the next scheduler run.
  * Republishing of AuthorizedAccountAgeData, AuthorizedSignedWitnessData and AuthorizedTimestampData is done by the
  * user by re-doing the requests before TTL expires.
+ * Once per start, with the lowest priority, we also publish again our authorized data which another key published, for
+ * example the data which earlier versions published with the key pair of our network identity.
  */
 @Slf4j
 public class Bisq1BridgeService implements Service, Node.Listener, DataService.Listener {
@@ -113,16 +119,20 @@ public class Bisq1BridgeService implements Service, Node.Listener, DataService.L
     private final AuthorizedBondedRolesService authorizedBondedRolesService;
     private final PrivateKey authorizedPrivateKey;
     private final PublicKey authorizedPublicKey;
+    // The authorized key owns the authorized data which this node publishes (see
+    // docs/specifications/network/authorized-data-publisher.md)
+    private final KeyPair authorizedKeyPair;
     private final BsqBlockGrpcService bsqBlockGrpcService;
     private final BurningmanGrpcService burningmanGrpcService;
     private final AuthorizedOracleNode myAuthorizedOracleNode;
     private final Bisq1BridgeRequestService bisq1BridgeRequestService;
     private final BlockingQueue<AuthorizedBondedRole> authorizedBondedRoleQueue = new LinkedBlockingQueue<>(10000);
+    // Earlier versions published our authorized data with the key pair of our network identity. We publish it once again
+    // with our authorized key pair (see docs/specifications/network/authorized-data-publisher.md).
+    private final BlockingQueue<AddAuthenticatedDataRequest> publisherMigrationQueue = new LinkedBlockingQueue<>();
     private final Set<ByteArray> userProfileProofOfBurnHashes = new ObservableSet<>();
     private final Set<ByteArray> userProfileBondedReputationHashes = new ObservableSet<>();
 
-    @Nullable
-    private KeyPair keyPair;
     @Nullable
     private volatile ScheduledExecutorService executor;
     private final Object executorLock = new Object();
@@ -145,6 +155,7 @@ public class Bisq1BridgeService implements Service, Node.Listener, DataService.L
         this.myAuthorizedOracleNode = myAuthorizedOracleNode;
         this.authorizedPrivateKey = authorizedPrivateKey;
         this.authorizedPublicKey = authorizedPublicKey;
+        authorizedKeyPair = new KeyPair(authorizedPublicKey, authorizedPrivateKey);
 
         burningmanGrpcService = new BurningmanGrpcService(staticPublicKeysProvided, grpcClient);
 
@@ -278,7 +289,8 @@ public class Bisq1BridgeService implements Service, Node.Listener, DataService.L
                 .forEach(authorizedBondedRoleQueue::offer);
     }
 
-    private void maybePublish() {
+    @VisibleForTesting
+    void maybePublish() {
         //  Highest priority: AuthorizedBondedRole
         AuthorizedDistributedData data = authorizedBondedRoleQueue.poll();
         // We don't call pollIfOldPublishAge as AuthorizedBondedRole is not of type PublishDateAware
@@ -300,11 +312,16 @@ public class Bisq1BridgeService implements Service, Node.Listener, DataService.L
         }
 
         if (data == null) {
-            // Finally: AuthorizedBurningmanListByBlock
+            // Then: AuthorizedBurningmanListByBlock
             data = burningmanGrpcService.getAuthorizedBurningmanListByBlockQueue().poll();
             if (data instanceof AuthorizedBurningmanListByBlock authorizedBurningmanListByBlock) {
                 data = skipRecentPublishAge(burningmanGrpcService.getAuthorizedBurningmanListByBlockQueue(), authorizedBurningmanListByBlock);
             }
+        }
+
+        if (data == null) {
+            // Finally: our authorized data which another key published
+            data = pollDataForPublisherMigration();
         }
 
         if (data != null) {
@@ -366,6 +383,8 @@ public class Bisq1BridgeService implements Service, Node.Listener, DataService.L
 
                 ScheduledExecutorService tmp = ExecutorFactory.newSingleThreadScheduledExecutor("Bisq1BridgePublisher");
                 int initialDelayInSeconds = DevMode.isDevMode() ? 1 : config.getInitialDelayInSeconds();
+                // After the initial delay, our store also contains the data which we received with the inventory
+                tmp.schedule(this::queueDataForPublisherMigration, initialDelayInSeconds, TimeUnit.SECONDS);
                 tmp.scheduleWithFixedDelay(this::maybePublish, initialDelayInSeconds, config.getThrottleDelayInSeconds(), TimeUnit.SECONDS);
                 executor = tmp;
 
@@ -375,15 +394,60 @@ public class Bisq1BridgeService implements Service, Node.Listener, DataService.L
     }
 
     private void publishAuthorizedData(AuthorizedDistributedData data) {
-        if (keyPair == null) {
-            Identity identity = identityService.getOrCreateDefaultIdentity();
-            keyPair = identity.getNetworkIdWithKeyPair().getKeyPair();
-        }
+        networkService.publishAuthorizedData(data, authorizedKeyPair);
+    }
 
-        networkService.publishAuthorizedData(data,
-                keyPair,
-                authorizedPrivateKey,
-                authorizedPublicKey);
+    @VisibleForTesting
+    void queueDataForPublisherMigration() {
+        try {
+            publisherMigrationQueue.clear();
+            byte[] authorizedPublicKeyBytes = authorizedPublicKey.getEncoded();
+            networkService.getDataService()
+                    .stream() // turns Optional<DataService> into Stream<DataService>
+                    .flatMap(dataService -> dataService.getStorageService().getAuthenticatedDataStoreMaps())
+                    .flatMap(map -> map.values().stream())
+                    .filter(request -> requiresPublisherMigration(request, authorizedPublicKeyBytes))
+                    .map(AddAuthenticatedDataRequest.class::cast)
+                    .forEach(publisherMigrationQueue::offer);
+            log.info("We publish {} entries of our authorized data again with our authorized key pair, because another " +
+                    "key published them", publisherMigrationQueue.size());
+        } catch (Exception e) {
+            log.error("Selecting our authorized data which another key published failed", e);
+        }
+    }
+
+    private AuthorizedDistributedData pollDataForPublisherMigration() {
+        AddAuthenticatedDataRequest request;
+        while ((request = publisherMigrationQueue.poll()) != null) {
+            if (publisherMigrationQueue.isEmpty()) {
+                log.info("We took the last entry of our authorized data which another key published");
+            }
+            // Publishing expired data again would give it a new time to live
+            if (!request.isExpired()) {
+                return (AuthorizedDistributedData) request.getDistributedData();
+            }
+        }
+        return null;
+    }
+
+    // The storage key of the entry contains neither the publisher nor the authorization signature. Our publication with
+    // the authorized key pair gets the next sequence number and replaces the entry on all nodes.
+    private static boolean requiresPublisherMigration(AuthenticatedDataRequest request, byte[] authorizedPublicKeyBytes) {
+        if (!(request instanceof AddAuthenticatedDataRequest addRequest) || addRequest.isExpired()) {
+            return false;
+        }
+        AuthenticatedSequentialData sequentialData = addRequest.getAuthenticatedSequentialData();
+        if (!(sequentialData.getAuthenticatedData() instanceof AuthorizedData authorizedData) ||
+                !Arrays.equals(authorizedData.getAuthorizedPublicKeyBytes(), authorizedPublicKeyBytes)) {
+            return false;
+        }
+        AuthorizedDistributedData data = authorizedData.getAuthorizedDistributedData();
+        // AuthorizedOracleNode names the key of our network ID as its owner. republishAuthorizedBondedRoles publishes
+        // our bonded roles again, except banned roles.
+        if (data instanceof AuthorizedOracleNode || data instanceof AuthorizedBondedRole) {
+            return false;
+        }
+        return !Arrays.equals(sequentialData.getPubKeyHash(), DigestUtil.hash(authorizedPublicKeyBytes));
     }
 
     private void handleUserProfileAdded(UserProfile userProfile) {

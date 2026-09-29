@@ -64,6 +64,7 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Arrays;
@@ -75,6 +76,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import static bisq.oracle_node.bisq1_bridge.grpc.messages.BondedRolesVerificationRequest.MAX_REGISTRATIONS;
 
@@ -802,19 +804,28 @@ public class Bisq1BridgeRequestService implements Service,
         persist();
     }
 
+    // The authorized key owns the authorized data which this node publishes (see
+    // docs/specifications/network/authorized-data-publisher.md)
     private CompletableFuture<BroadcastResult> publishAuthorizedData(AuthorizedDistributedData data) {
-        Identity identity = identityService.getOrCreateDefaultIdentity();
-        return networkService.publishAuthorizedData(data,
-                identity.getNetworkIdWithKeyPair().getKeyPair(),
-                authorizedPrivateKey,
-                authorizedPublicKey);
+        return networkService.publishAuthorizedData(data, getAuthorizedKeyPair());
     }
 
     private CompletableFuture<BroadcastResult> removeAuthorizedData(AuthorizedBondedRole authorizedDistributedData) {
+        CompletableFuture<BroadcastResult> removal = networkService.removeAuthorizedData(authorizedDistributedData,
+                getAuthorizedKeyPair());
+        // Oracle nodes of earlier versions published it with the key pair of their network identity. A node accepts
+        // only the removal of the key which published its entry, so we remove it with both key pairs.
         Identity identity = identityService.getOrCreateDefaultIdentity();
-        return networkService.removeAuthorizedData(authorizedDistributedData,
+        CompletableFuture<BroadcastResult> removalWithIdentityKeyPair = networkService.removeAuthorizedData(
+                authorizedDistributedData,
                 identity.getNetworkIdWithKeyPair().getKeyPair(),
                 authorizedPublicKey);
+        return removal.thenCombine(removalWithIdentityKeyPair, (broadcastResult, broadcastResultWithIdentityKeyPair) ->
+                new BroadcastResult(Stream.concat(broadcastResult.stream(), broadcastResultWithIdentityKeyPair.stream())));
+    }
+
+    private KeyPair getAuthorizedKeyPair() {
+        return new KeyPair(authorizedPublicKey, authorizedPrivateKey);
     }
 
 

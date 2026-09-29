@@ -105,6 +105,9 @@ public class OracleNodeService implements Service {
 
     private final PrivateKey authorizedPrivateKey;
     private final PublicKey authorizedPublicKey;
+    // The authorized key owns the authorized data which this node publishes (see
+    // docs/specifications/network/authorized-data-publisher.md)
+    private final KeyPair authorizedKeyPair;
     private final TimestampService timestampService;
     private final String bondUserName;
     private final String signatureBase64;
@@ -147,17 +150,16 @@ public class OracleNodeService implements Service {
 
         authorizedPrivateKey = KeyGeneration.getPrivateKeyFromHex(privateKey);
         authorizedPublicKey = KeyGeneration.getPublicKeyFromHex(publicKey);
+        authorizedKeyPair = new KeyPair(authorizedPublicKey, authorizedPrivateKey);
 
         timestampService = new TimestampService(persistenceService,
-                identityService,
                 networkService,
                 authorizedBondedRolesService,
                 authorizedPrivateKey,
                 authorizedPublicKey,
                 staticPublicKeysProvided);
 
-        marketPricePropagationService = new MarketPricePropagationService(identityService,
-                networkService,
+        marketPricePropagationService = new MarketPricePropagationService(networkService,
                 marketPriceRequestService,
                 authorizedPrivateKey,
                 authorizedPublicKey,
@@ -234,9 +236,12 @@ public class OracleNodeService implements Service {
             @Override
             public void onRemoved(Object element) {
                 if (element instanceof BondedRole bondedRole) {
-                    networkService.removeAuthorizedData(bondedRole.getAuthorizedBondedRole(),
-                            keyPair,
-                            authorizedPublicKey);
+                    AuthorizedBondedRole authorizedBondedRole = bondedRole.getAuthorizedBondedRole();
+                    networkService.removeAuthorizedData(authorizedBondedRole, authorizedKeyPair);
+                    // Oracle nodes of earlier versions published it with the key pair of their network identity. A node
+                    // accepts only the removal of the key which published its entry, so we remove it with both key
+                    // pairs (see docs/specifications/network/authorized-data-publisher.md).
+                    networkService.removeAuthorizedData(authorizedBondedRole, keyPair, authorizedPublicKey);
                 }
             }
 
@@ -291,10 +296,8 @@ public class OracleNodeService implements Service {
     private void publishMyAuthorizedData(AuthorizedOracleNode authorizedOracleNode,
                                          AuthorizedBondedRole authorizedBondedRole,
                                          KeyPair keyPair) {
-        networkService.publishAuthorizedData(authorizedBondedRole,
-                keyPair,
-                authorizedPrivateKey,
-                authorizedPublicKey);
+        networkService.publishAuthorizedData(authorizedBondedRole, authorizedKeyPair);
+        // AuthorizedOracleNode names the key of our network ID as its owner
         networkService.publishAuthorizedData(authorizedOracleNode,
                 keyPair,
                 authorizedPrivateKey,

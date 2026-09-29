@@ -50,6 +50,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.typesafe.config.ConfigFactory;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.security.KeyPair;
 import java.util.Base64;
@@ -61,6 +62,9 @@ import java.util.stream.Stream;
 import static bisq.oracle_node.TestBondedRoleRegistrations.createCurrentRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -126,10 +130,11 @@ class Bisq1BridgeRequestServiceTest {
         when(signedWitnessGrpcService.verifyAndRequestAuthorization(any()))
                 .thenReturn(new SignedWitnessOwnershipResponse(signedWitnessBucket, witnessNullifier));
         NetworkService networkService = mock(NetworkService.class);
-        when(networkService.publishAuthorizedData(any(), any(), any(), any()))
+        when(networkService.publishAuthorizedData(any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
+        KeyPair authorizedKeyPair = KeyGeneration.generateDefaultEcKeyPair();
         Bisq1BridgeRequestService service = createServiceWithWitnessGrpcServices(
-                accountAgeGrpcService, signedWitnessGrpcService, networkService);
+                accountAgeGrpcService, signedWitnessGrpcService, networkService, authorizedKeyPair);
         useDirectExecutor(service);
         KeyPair sender = KeyGeneration.generateDefaultEcKeyPair();
         String profileId = profileId(sender);
@@ -139,7 +144,11 @@ class Bisq1BridgeRequestServiceTest {
 
         ArgumentCaptor<AuthorizedDistributedData> publishedData =
                 ArgumentCaptor.forClass(AuthorizedDistributedData.class);
-        verify(networkService, times(2)).publishAuthorizedData(publishedData.capture(), any(), any(), any());
+        // The authorized key owns the data which the oracle node publishes (see
+        // docs/specifications/network/authorized-data-publisher.md)
+        verify(networkService, times(2)).publishAuthorizedData(publishedData.capture(),
+                argThat((KeyPair keyPair) -> keyPair.getPublic().equals(authorizedKeyPair.getPublic())));
+        verify(networkService, never()).publishAuthorizedData(any(), any(), any(), any());
         assertThat(publishedData.getAllValues())
                 .anySatisfy(value -> {
                     assertThat(value).isInstanceOf(AuthorizedAccountAgeData.class);
@@ -390,6 +399,8 @@ class Bisq1BridgeRequestServiceTest {
         when(bondedRoleGrpcService.requestBondedRoleVerification(any(), any()))
                 .thenReturn(new BondedRoleVerificationResponse(Optional.empty()));
         NetworkService networkService = mock(NetworkService.class);
+        when(networkService.removeAuthorizedData(any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
         when(networkService.removeAuthorizedData(any(), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
         IdentityService identityService = mock(IdentityService.class);
@@ -438,15 +449,18 @@ class Bisq1BridgeRequestServiceTest {
         when(bondedRoleGrpcService.requestBondedRoleVerification(any(), any()))
                 .thenReturn(new BondedRoleVerificationResponse(Optional.empty()));
         NetworkService networkService = mock(NetworkService.class);
+        when(networkService.removeAuthorizedData(any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
         when(networkService.removeAuthorizedData(any(), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
         IdentityService identityService = mock(IdentityService.class);
         Identity identity = mock(Identity.class);
+        KeyPair identityKeyPair = KeyGeneration.generateDefaultEcKeyPair();
         when(identity.getNetworkIdWithKeyPair()).thenReturn(
-                new bisq.network.identity.NetworkIdWithKeyPair(registration.getNetworkId(),
-                        KeyGeneration.generateDefaultEcKeyPair()));
+                new bisq.network.identity.NetworkIdWithKeyPair(registration.getNetworkId(), identityKeyPair));
         when(identityService.getOrCreateDefaultIdentity()).thenReturn(identity);
-        Bisq1BridgeRequestService service = createService(KeyGeneration.generateDefaultEcKeyPair(),
+        KeyPair authorizedKeyPair = KeyGeneration.generateDefaultEcKeyPair();
+        Bisq1BridgeRequestService service = createService(authorizedKeyPair,
                 identityService, networkService, mock(AuthorizedBondedRolesService.class), bondedRoleGrpcService,
                 mock(GrpcClient.class));
         service.getPersistableStore().getBondedRoleRegistrationRequests().add(registration);
@@ -455,7 +469,7 @@ class Bisq1BridgeRequestServiceTest {
         service.onConfidentialMessage(cancellation, KeyGeneration.generateDefaultEcKeyPair().getPublic());
 
         verify(bondedRoleGrpcService).requestBondedRoleVerification(any(), any());
-        verify(networkService).removeAuthorizedData(any(), any(), any());
+        verifyRemovalWithAuthorizedAndIdentityKeyPair(networkService, authorizedKeyPair, identityKeyPair);
         assertThat(service.getPersistableStore().getBondedRoleRegistrationRequests()).isEmpty();
     }
 
@@ -500,22 +514,25 @@ class Bisq1BridgeRequestServiceTest {
                         List.of(new BondedRoleVerificationResponse(Optional.of("invalid")),
                                 new BondedRoleVerificationResponse(Optional.empty()))));
         NetworkService networkService = mock(NetworkService.class);
+        when(networkService.removeAuthorizedData(any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
         when(networkService.removeAuthorizedData(any(), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(new BroadcastResult()));
         IdentityService identityService = mock(IdentityService.class);
         Identity identity = mock(Identity.class);
+        KeyPair identityKeyPair = KeyGeneration.generateDefaultEcKeyPair();
         when(identity.getNetworkIdWithKeyPair()).thenReturn(
-                new bisq.network.identity.NetworkIdWithKeyPair(invalid.getNetworkId(),
-                        KeyGeneration.generateDefaultEcKeyPair()));
+                new bisq.network.identity.NetworkIdWithKeyPair(invalid.getNetworkId(), identityKeyPair));
         when(identityService.getOrCreateDefaultIdentity()).thenReturn(identity);
-        Bisq1BridgeRequestService service = createService(KeyGeneration.generateDefaultEcKeyPair(),
+        KeyPair authorizedKeyPair = KeyGeneration.generateDefaultEcKeyPair();
+        Bisq1BridgeRequestService service = createService(authorizedKeyPair,
                 identityService, networkService, mock(AuthorizedBondedRolesService.class), bondedRoleGrpcService,
                 mock(GrpcClient.class));
         service.getPersistableStore().getBondedRoleRegistrationRequests().addAll(List.of(invalid, valid));
 
         service.revalidateBondedRolesNow();
 
-        verify(networkService).removeAuthorizedData(any(), any(), any());
+        verifyRemovalWithAuthorizedAndIdentityKeyPair(networkService, authorizedKeyPair, identityKeyPair);
         assertThat(service.getPersistableStore().getBondedRoleRegistrationRequests()).containsExactly(valid);
     }
 
@@ -615,6 +632,18 @@ class Bisq1BridgeRequestServiceTest {
         return Math.floorDiv(date, bucketSize) * bucketSize;
     }
 
+    // The authorized key owns the data. Oracle nodes of earlier versions published it with the key pair of their network
+    // identity, so the oracle node removes it with both key pairs, first with the authorized key pair (see
+    // docs/specifications/network/authorized-data-publisher.md).
+    private static void verifyRemovalWithAuthorizedAndIdentityKeyPair(NetworkService networkService,
+                                                                     KeyPair authorizedKeyPair,
+                                                                     KeyPair identityKeyPair) {
+        InOrder inOrder = inOrder(networkService);
+        inOrder.verify(networkService).removeAuthorizedData(any(),
+                argThat((KeyPair keyPair) -> keyPair.getPublic().equals(authorizedKeyPair.getPublic())));
+        inOrder.verify(networkService).removeAuthorizedData(any(), eq(identityKeyPair), eq(authorizedKeyPair.getPublic()));
+    }
+
     private static void useDirectExecutor(Bisq1BridgeRequestService service) {
         service.setExecutor(MoreExecutors.newDirectExecutorService());
     }
@@ -628,7 +657,17 @@ class Bisq1BridgeRequestServiceTest {
             AccountAgeWitnessGrpcService accountAgeWitnessGrpcService,
             SignedWitnessGrpcService signedWitnessGrpcService,
             NetworkService networkService) {
-        var authorizedKeyPair = KeyGeneration.generateDefaultEcKeyPair();
+        return createServiceWithWitnessGrpcServices(accountAgeWitnessGrpcService,
+                signedWitnessGrpcService,
+                networkService,
+                KeyGeneration.generateDefaultEcKeyPair());
+    }
+
+    private static Bisq1BridgeRequestService createServiceWithWitnessGrpcServices(
+            AccountAgeWitnessGrpcService accountAgeWitnessGrpcService,
+            SignedWitnessGrpcService signedWitnessGrpcService,
+            NetworkService networkService,
+            KeyPair authorizedKeyPair) {
         PersistenceService persistenceService = mock(PersistenceService.class);
         @SuppressWarnings("unchecked")
         Persistence<Bisq1BridgeRequestStore> persistence = mock(Persistence.class);

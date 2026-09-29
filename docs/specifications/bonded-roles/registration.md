@@ -68,6 +68,9 @@ request in its private bridge-request store. The persisted request is the source
 revalidation and removal. A cancellation request is not stored as a registration and is ignored if
 encountered while loading persisted registration state.
 
+The oracle publishes the authorization with its authorized key pair and removes it with the key
+pairs defined in [`../network/authorized-data-publisher.md`](../network/authorized-data-publisher.md).
+
 Multiple registrations for the same public role may coexist when they have distinct signed
 proposal/lockup bindings. They are independent. A cancellation removes only the persisted
 registration whose identity, signature, protocol version and transaction binding match the request.
