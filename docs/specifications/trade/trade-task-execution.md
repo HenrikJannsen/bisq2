@@ -81,3 +81,12 @@ the trade stopped. Locks in single places did not cover all such combinations.
   protocol message of the action (see [Trade log messages of user actions](trade-log-of-user-actions.md)). The network
   layer registers a message for a resend only when its send starts, so the node lets the queued messages start before
   it stops.
+
+## Not covered
+
+- Durability: the queues and the pending messages are in memory. A message which the network acknowledged before its
+  task ran is lost at a crash or a restart. A stored inbox of each trade, which the protocol of the trade drains, would
+  remove this. It needs its own decision, also on when the network layer acknowledges a message.
+- Order of the peer: the rules order the processing by the arrival at the trade service, not by the order in which the
+  peer sent its messages. The network layer passes received messages in parallel, and the mailbox does not keep the
+  order. The state machine of a trade accepts the messages of the peer in the orders which can arrive.
