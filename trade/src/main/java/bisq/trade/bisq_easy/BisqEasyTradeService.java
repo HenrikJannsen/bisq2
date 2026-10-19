@@ -229,24 +229,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     @Override
     public void onMessage(EnvelopePayloadMessage envelopePayloadMessage) {
         if (envelopePayloadMessage instanceof BisqEasyTradeMessage bisqEasyTradeMessage) {
-            try {
-                verifyTradingNotOnHalt();
-                verifyMinVersionForTrading();
-            } catch (TradeRestrictedException e) {
-                log.warn("Ignoring inbound trade message as trading is currently not allowed: {}", e.getMessage());
-                return;
-            }
-
-            if (bannedUserService.isUserProfileBanned(bisqEasyTradeMessage.getSender())) {
-                log.warn("Message ignored as sender is banned");
-                return;
-            }
-
-            if (bisqEasyTradeMessage instanceof BisqEasyTakeOfferRequest) {
-                handleBisqEasyTakeOfferMessage((BisqEasyTakeOfferRequest) bisqEasyTradeMessage);
-            } else {
-                handleBisqEasyTradeMessage(bisqEasyTradeMessage);
-            }
+            processTradeMessage(bisqEasyTradeMessage);
         }
     }
 
@@ -254,6 +237,27 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     /* --------------------------------------------------------------------- */
     // Message event
     /* --------------------------------------------------------------------- */
+
+    private void processTradeMessage(BisqEasyTradeMessage message) {
+        try {
+            verifyTradingNotOnHalt();
+            verifyMinVersionForTrading();
+        } catch (TradeRestrictedException e) {
+            log.warn("Ignoring inbound trade message as trading is currently not allowed: {}", e.getMessage());
+            return;
+        }
+
+        if (bannedUserService.isUserProfileBanned(message.getSender())) {
+            log.warn("Message ignored as sender is banned");
+            return;
+        }
+
+        if (message instanceof BisqEasyTakeOfferRequest takeOfferRequest) {
+            handleBisqEasyTakeOfferMessage(takeOfferRequest);
+        } else {
+            handleBisqEasyTradeMessage(message);
+        }
+    }
 
     private void handleBisqEasyTakeOfferMessage(BisqEasyTakeOfferRequest message) {
         makerCreatesProtocol(message).ifPresent(protocol -> handleBisqEasyTradeMessage(message, protocol));
