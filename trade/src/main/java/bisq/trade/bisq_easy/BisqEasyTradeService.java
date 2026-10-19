@@ -322,6 +322,19 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                                                  FiatPaymentMethodSpec fiatPaymentMethodSpec,
                                                  Optional<UserProfile> mediator,
                                                  long marketPrice) {
+        verifyTakeOffer(bisqEasyOffer, baseSideAmount, quoteSideAmount);
+        BisqEasyTrade bisqEasyTrade = createTakersTrade(takerIdentity,
+                bisqEasyOffer,
+                baseSideAmount,
+                quoteSideAmount,
+                bitcoinPaymentMethodSpec,
+                fiatPaymentMethodSpec,
+                mediator,
+                marketPrice);
+        return takerAddsTradeAndCreatesProtocol(bisqEasyTrade);
+    }
+
+    private void verifyTakeOffer(BisqEasyOffer bisqEasyOffer, Monetary baseSideAmount, Monetary quoteSideAmount) {
         verifyTradingNotOnHalt();
         verifyMinVersionForTrading();
         verifyMakerMeetsMinVersionForTrading(bisqEasyOffer);
@@ -337,7 +350,16 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                     quoteSideAmount,
                     bisqEasyOffer.getMakersUserProfileId());
         }
+    }
 
+    private static BisqEasyTrade createTakersTrade(Identity takerIdentity,
+                                                   BisqEasyOffer bisqEasyOffer,
+                                                   Monetary baseSideAmount,
+                                                   Monetary quoteSideAmount,
+                                                   BitcoinPaymentMethodSpec bitcoinPaymentMethodSpec,
+                                                   FiatPaymentMethodSpec fiatPaymentMethodSpec,
+                                                   Optional<UserProfile> mediator,
+                                                   long marketPrice) {
         NetworkId takerNetworkId = takerIdentity.getNetworkId();
         BisqEasyContract contract = new BisqEasyContract(
                 System.currentTimeMillis(),
@@ -353,8 +375,10 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                 marketPrice);
         boolean isBuyer = bisqEasyOffer.getTakersDirection().isBuy();
         NetworkId makerNetworkId = contract.getMaker().getNetworkId();
-        BisqEasyTrade bisqEasyTrade = new BisqEasyTrade(contract, isBuyer, true, takerIdentity, bisqEasyOffer, takerNetworkId, makerNetworkId);
+        return new BisqEasyTrade(contract, isBuyer, true, takerIdentity, bisqEasyOffer, takerNetworkId, makerNetworkId);
+    }
 
+    private BisqEasyProtocol takerAddsTradeAndCreatesProtocol(BisqEasyTrade bisqEasyTrade) {
         checkArgument(findProtocol(bisqEasyTrade.getId()).isEmpty(),
                 "We received the BisqEasyTakeOfferRequest for an already existing protocol");
 
@@ -362,7 +386,8 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         persistableStore.addTrade(bisqEasyTrade);
         persist();
 
-        maybeAddPeerToContactList(makerNetworkId.getId(), takerNetworkId.getId());
+        maybeAddPeerToContactList(bisqEasyTrade.getMaker().getNetworkId().getId(),
+                bisqEasyTrade.getTaker().getNetworkId().getId());
 
         return createAndAddTradeProtocol(bisqEasyTrade);
     }
