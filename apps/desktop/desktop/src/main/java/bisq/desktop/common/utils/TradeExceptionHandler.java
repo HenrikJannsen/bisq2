@@ -26,6 +26,16 @@ public final class TradeExceptionHandler {
     private TradeExceptionHandler() {
     }
 
+    /**
+     * Runs the trade action, and then onApplied if the trade applied the action. In onApplied the caller sends the
+     * data of the action to the peer as trade log message (docs/specifications/trade/trade-log-of-user-actions.md).
+     */
+    public static void run(Runnable tradeAction, Runnable onApplied) {
+        if (run(tradeAction)) {
+            onApplied.run();
+        }
+    }
+
     public static boolean run(Runnable tradeAction) {
         try {
             tradeAction.run();

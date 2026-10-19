@@ -81,9 +81,8 @@ public class BuyerStateLightning3b extends BaseState {
         }
 
         private void onButtonClicked() {
-            if (TradeExceptionHandler.run(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()))) {
-                sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", model.getChannel().getMyUserIdentity().getUserName()));
-            }
+            TradeExceptionHandler.run(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()),
+                    () -> sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", model.getChannel().getMyUserIdentity().getUserName())));
         }
     }
 

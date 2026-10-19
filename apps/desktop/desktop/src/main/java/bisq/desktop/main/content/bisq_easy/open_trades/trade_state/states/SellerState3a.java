@@ -190,14 +190,14 @@ public class SellerState3a extends BaseState {
         }
 
         private void confirmedBtcSent(Optional<String> paymentProof, String userName, String proofType) {
-            if (TradeExceptionHandler.run(() -> bisqEasyTradeService.sellerConfirmBtcSent(model.getTrade(), paymentProof))) {
+            TradeExceptionHandler.run(() -> bisqEasyTradeService.sellerConfirmBtcSent(model.getTrade(), paymentProof), () -> {
                 if (paymentProof.isEmpty()) {
                     sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.noProofProvided", userName));
                 } else {
                     sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage",
                             userName, proofType, paymentProof.get()));
                 }
-            }
+            });
         }
 
         void onShowQrCodeDisplay() {

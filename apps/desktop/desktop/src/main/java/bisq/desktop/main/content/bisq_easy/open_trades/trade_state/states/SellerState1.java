@@ -128,10 +128,9 @@ public class SellerState1 extends BaseState {
                 new Popup().warning(Res.get("validation.tooLong", UserProfile.MAX_LENGTH_STATEMENT)).show();
                 return;
             }
-            if (TradeExceptionHandler.run(() -> bisqEasyTradeService.sellerSendsPaymentAccount(model.getTrade(), paymentAccountData))) {
-                sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage",
-                        model.getChannel().getMyUserIdentity().getUserName(), model.getPaymentAccountData().get()));
-            }
+            TradeExceptionHandler.run(() -> bisqEasyTradeService.sellerSendsPaymentAccount(model.getTrade(), paymentAccountData),
+                    () -> sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage",
+                            model.getChannel().getMyUserIdentity().getUserName(), paymentAccountData)));
         }
 
         private void onSelectAccount(UserDefinedFiatAccount account) {

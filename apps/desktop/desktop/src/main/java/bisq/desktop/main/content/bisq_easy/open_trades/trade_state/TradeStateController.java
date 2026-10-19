@@ -269,15 +269,13 @@ public class TradeStateController implements Controller {
         switch (model.getTradeCloseType()) {
             case REJECT:
                 encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
-                if (TradeExceptionHandler.run(() -> bisqEasyTradeService.rejectTrade(trade))) {
-                    channelService.sendTradeLogMessage(encoded, channel);
-                }
+                TradeExceptionHandler.run(() -> bisqEasyTradeService.rejectTrade(trade),
+                        () -> channelService.sendTradeLogMessage(encoded, channel));
                 break;
             case CANCEL:
                 encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.cancelled", userName);
-                if (TradeExceptionHandler.run(() -> bisqEasyTradeService.cancelTrade(trade))) {
-                    channelService.sendTradeLogMessage(encoded, channel);
-                }
+                TradeExceptionHandler.run(() -> bisqEasyTradeService.cancelTrade(trade),
+                        () -> channelService.sendTradeLogMessage(encoded, channel));
                 break;
             case COMPLETED:
             default:
