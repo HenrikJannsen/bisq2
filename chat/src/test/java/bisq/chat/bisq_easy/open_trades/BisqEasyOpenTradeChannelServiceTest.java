@@ -51,6 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 public class BisqEasyOpenTradeChannelServiceTest {
@@ -61,6 +63,8 @@ public class BisqEasyOpenTradeChannelServiceTest {
 
     private BisqEasyOpenTradeChannelService service;
     private UserIdentityService userIdentityService;
+    private UserProfileService userProfileService;
+    private NetworkService networkService;
     private UserProfile taker;
     private UserIdentity makerIdentity;
 
@@ -76,7 +80,8 @@ public class BisqEasyOpenTradeChannelServiceTest {
         userIdentityService = mock(UserIdentityService.class);
         UserService userService = mock(UserService.class);
         when(userService.getUserIdentityService()).thenReturn(userIdentityService);
-        when(userService.getUserProfileService()).thenReturn(mock(UserProfileService.class));
+        userProfileService = mock(UserProfileService.class);
+        when(userService.getUserProfileService()).thenReturn(userProfileService);
         when(userService.getBannedUserService()).thenReturn(mock(BannedUserService.class));
         when(userService.getContactListService()).thenReturn(mock(ContactListService.class));
 
@@ -87,7 +92,30 @@ public class BisqEasyOpenTradeChannelServiceTest {
         taker = mock(UserProfile.class);
         when(taker.getId()).thenReturn(TAKER_PROFILE_ID);
 
-        service = new BisqEasyOpenTradeChannelService(persistenceService, mock(NetworkService.class), userService);
+        networkService = mock(NetworkService.class);
+        service = new BisqEasyOpenTradeChannelService(persistenceService, networkService, userService);
+    }
+
+    @Test
+    void outgoingTakeOfferKeepsTheIdentityCapturedBeforeSelectionChanged() {
+        var offer = mock(BisqEasyOffer.class);
+        when(offer.getMakersUserProfileId()).thenReturn(TAKER_PROFILE_ID);
+        when(userProfileService.findUserProfile(TAKER_PROFILE_ID)).thenReturn(Optional.of(taker));
+        NetworkId peerNetworkId = networkIdOf(TAKER_PROFILE_ID);
+        when(taker.getNetworkId()).thenReturn(peerNetworkId);
+        var capturedProfile = mock(UserProfile.class);
+        when(capturedProfile.getId()).thenReturn(MAKER_PROFILE_ID);
+        when(makerIdentity.getUserProfile()).thenReturn(capturedProfile);
+        var newSelection = mock(UserIdentity.class);
+        when(userIdentityService.getSelectedUserIdentity()).thenReturn(newSelection);
+        when(networkService.confidentialSend(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+
+        service.sendTakeOfferMessage(TRADE_ID, offer, Optional.empty(), makerIdentity).join();
+
+        var channel = service.findChannelByTradeId(TRADE_ID).orElseThrow();
+        assertSame(makerIdentity, channel.getMyUserIdentity());
+        assertSame(capturedProfile, channel.getChatMessages().iterator().next().getSenderUserProfile());
+        verify(userIdentityService, never()).getSelectedUserIdentity();
     }
 
     @Test

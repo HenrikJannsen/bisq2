@@ -135,12 +135,18 @@ public class BisqEasyOpenTradeChannelService extends PrivateGroupChatChannelServ
     public CompletableFuture<SendMessageResult> sendTakeOfferMessage(String tradeId,
                                                                      BisqEasyOffer bisqEasyOffer,
                                                                      Optional<UserProfile> mediator) {
+        return sendTakeOfferMessage(tradeId, bisqEasyOffer, mediator, userIdentityService.getSelectedUserIdentity());
+    }
+
+    public CompletableFuture<SendMessageResult> sendTakeOfferMessage(String tradeId,
+                                                                     BisqEasyOffer bisqEasyOffer,
+                                                                     Optional<UserProfile> mediator,
+                                                                     UserIdentity myUserIdentity) {
         return userProfileService.findUserProfile(bisqEasyOffer.getMakersUserProfileId())
                 .map(makerUserProfile -> {
                     if (bannedUserService.isUserProfileBanned(makerUserProfile)) {
                         return CompletableFuture.<SendMessageResult>failedFuture(new RuntimeException("Maker is banned"));
                     }
-                    UserIdentity myUserIdentity = userIdentityService.getSelectedUserIdentity();
                     if (bannedUserService.isUserProfileBanned(myUserIdentity.getUserProfile())) {
                         return CompletableFuture.<SendMessageResult>failedFuture(new RuntimeException());
                     }
