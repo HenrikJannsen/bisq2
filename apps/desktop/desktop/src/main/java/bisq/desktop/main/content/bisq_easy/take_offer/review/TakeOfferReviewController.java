@@ -72,6 +72,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -201,9 +202,9 @@ public class TakeOfferReviewController implements Controller {
         BitcoinPaymentMethodSpec bitcoinPaymentMethodSpec = model.getBitcoinPaymentMethodSpec();
         FiatPaymentMethodSpec fiatPaymentMethodSpec = model.getFiatPaymentMethodSpec();
         long marketPrice = model.getMarketPrice();
-        BisqEasyProtocol bisqEasyProtocol;
+        CompletableFuture<BisqEasyProtocol> protocolCreation;
         try {
-            bisqEasyProtocol = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
+            protocolCreation = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
                     bisqEasyOffer,
                     takersBaseSideAmount,
                     takersQuoteSideAmount,
@@ -226,7 +227,17 @@ public class TakeOfferReviewController implements Controller {
             new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.marketPriceNotCurrent")).show();
             return;
         }
-        continueTakeOffer(bisqEasyOffer, bisqEasyProtocol.getModel(), mediator);
+        // The trade gets created in a task of the trade. Until then the main buttons are hidden, so that a second click
+        // does not take the offer again.
+        mainButtonsVisibleHandler.accept(false);
+        protocolCreation.whenComplete((bisqEasyProtocol, throwable) -> UIThread.run(() -> {
+            if (throwable != null) {
+                mainButtonsVisibleHandler.accept(true);
+                new Popup().error(throwable).show();
+            } else {
+                continueTakeOffer(bisqEasyOffer, bisqEasyProtocol.getModel(), mediator);
+            }
+        }));
     }
 
     private void continueTakeOffer(BisqEasyOffer bisqEasyOffer, BisqEasyTrade trade, Optional<UserProfile> mediator) {
@@ -298,6 +309,7 @@ public class TakeOfferReviewController implements Controller {
                 peersErrorMessagePin.unbind();
                 peersErrorMessagePin = null;
             }
+            mainButtonsVisibleHandler.accept(true);
             new Popup().warning(TradeExceptionHandler.localizedMessage(e)).show();
             return;
         }

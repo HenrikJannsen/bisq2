@@ -89,6 +89,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -479,9 +480,9 @@ public class TradeWizardReviewController implements Controller {
         BitcoinPaymentMethodSpec bitcoinPaymentMethodSpec = new BitcoinPaymentMethodSpec(model.getTakersSelectedBitcoinPaymentMethod());
         FiatPaymentMethodSpec fiatPaymentMethodSpec = new FiatPaymentMethodSpec(model.getTakersSelectedFiatPaymentMethod());
         long marketPrice = model.getMarketPrice();
-        BisqEasyProtocol bisqEasyProtocol;
+        CompletableFuture<BisqEasyProtocol> protocolCreation;
         try {
-            bisqEasyProtocol = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
+            protocolCreation = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
                     bisqEasyOffer,
                     takersBaseSideAmount,
                     takersQuoteSideAmount,
@@ -504,7 +505,17 @@ public class TradeWizardReviewController implements Controller {
             new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.marketPriceNotCurrent")).show();
             return;
         }
-        continueTakeOffer(bisqEasyOffer, bisqEasyProtocol.getModel(), mediator);
+        // The trade gets created in a task of the trade. Until then the main buttons are hidden, so that a second click
+        // does not take the offer again.
+        mainButtonsVisibleHandler.accept(false);
+        protocolCreation.whenComplete((bisqEasyProtocol, throwable) -> UIThread.run(() -> {
+            if (throwable != null) {
+                mainButtonsVisibleHandler.accept(true);
+                new Popup().error(throwable).show();
+            } else {
+                continueTakeOffer(bisqEasyOffer, bisqEasyProtocol.getModel(), mediator);
+            }
+        }));
     }
 
     private void continueTakeOffer(BisqEasyOffer bisqEasyOffer, BisqEasyTrade trade, Optional<UserProfile> mediator) {
@@ -576,6 +587,7 @@ public class TradeWizardReviewController implements Controller {
                 peersErrorMessagePin.unbind();
                 peersErrorMessagePin = null;
             }
+            mainButtonsVisibleHandler.accept(true);
             new Popup().warning(TradeExceptionHandler.localizedMessage(e)).show();
             return;
         }

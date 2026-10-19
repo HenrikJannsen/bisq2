@@ -231,14 +231,14 @@ public class TradeRestApi extends RestApiBase {
             long marketPrice = marketPriceService.findMarketPrice(bisqEasyOffer.getMarket())
                     .map(e -> e.getPriceQuote().getValue())
                     .orElseThrow();
-            BisqEasyProtocol bisqEasyProtocol = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
+            BisqEasyProtocol bisqEasyProtocol = join(bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
                     bisqEasyOffer,
                     baseSideAmount,
                     quoteSideAmount,
                     bitcoinPaymentMethodSpec,
                     fiatPaymentMethodSpec,
                     mediator,
-                    marketPrice);
+                    marketPrice));
             BisqEasyTrade bisqEasyTrade = bisqEasyProtocol.getModel();
             log.info("Selected mediator for trade {}: {}", bisqEasyTrade.getShortId(), mediator.map(UserProfile::getUserName).orElse("N/A"));
 

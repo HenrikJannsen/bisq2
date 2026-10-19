@@ -146,7 +146,7 @@ class BisqEasyTradeServiceBuyerTakeReputationTest {
                 offer.getBaseSidePaymentMethodSpecs().get(0),
                 offer.getQuoteSidePaymentMethodSpecs().get(0),
                 Optional.empty(),
-                100_000_0000);
+                100_000_0000).join();
     }
 
     private static BisqEasyOffer buyOffer() {

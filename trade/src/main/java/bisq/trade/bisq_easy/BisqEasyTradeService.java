@@ -364,14 +364,16 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     // Events
     /* --------------------------------------------------------------------- */
 
-    public BisqEasyProtocol takerCreatesProtocol(Identity takerIdentity,
-                                                 BisqEasyOffer bisqEasyOffer,
-                                                 Monetary baseSideAmount,
-                                                 Monetary quoteSideAmount,
-                                                 BitcoinPaymentMethodSpec bitcoinPaymentMethodSpec,
-                                                 FiatPaymentMethodSpec fiatPaymentMethodSpec,
-                                                 Optional<UserProfile> mediator,
-                                                 long marketPrice) {
+    // The checks report their failure by an exception of this call. The trade and its protocol get created in a task of
+    // the new trade, whose result the returned future carries.
+    public CompletableFuture<BisqEasyProtocol> takerCreatesProtocol(Identity takerIdentity,
+                                                                    BisqEasyOffer bisqEasyOffer,
+                                                                    Monetary baseSideAmount,
+                                                                    Monetary quoteSideAmount,
+                                                                    BitcoinPaymentMethodSpec bitcoinPaymentMethodSpec,
+                                                                    FiatPaymentMethodSpec fiatPaymentMethodSpec,
+                                                                    Optional<UserProfile> mediator,
+                                                                    long marketPrice) {
         verifyTakeOffer(bisqEasyOffer, baseSideAmount, quoteSideAmount);
         BisqEasyTrade bisqEasyTrade = createTakersTrade(takerIdentity,
                 bisqEasyOffer,
@@ -381,7 +383,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                 fiatPaymentMethodSpec,
                 mediator,
                 marketPrice);
-        return takerAddsTradeAndCreatesProtocol(bisqEasyTrade);
+        return tradeTaskExecutor.supply(bisqEasyTrade.getId(), () -> takerAddsTradeAndCreatesProtocol(bisqEasyTrade));
     }
 
     private void verifyTakeOffer(BisqEasyOffer bisqEasyOffer, Monetary baseSideAmount, Monetary quoteSideAmount) {

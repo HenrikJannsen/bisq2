@@ -185,7 +185,7 @@ class BisqEasyTradeServiceMakerVersionTest {
                 offer.getBaseSidePaymentMethodSpecs().get(0),
                 offer.getQuoteSidePaymentMethodSpecs().get(0),
                 Optional.empty(),
-                60_000_0000);
+                60_000_0000).join();
     }
 
     private void offerWasCreatedByVersion(String appVersion) {

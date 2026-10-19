@@ -26,8 +26,9 @@ the trade stopped. Locks in single places did not cover all such combinations.
    failed creation is logged, and the other trades still start.
 8. The check of a trade chat channel against its trade runs as a task of the trade.
 9. The actions of the user on a trade, from the desktop or the API, run as tasks of the trade. This includes taking an
-   offer, rejecting or cancelling a trade, and confirming the Bitcoin payment. The call checks the trade restrictions
-   and the data of the action, and returns a future of the task.
+   offer, rejecting or cancelling a trade, and confirming the Bitcoin payment. The taker creates its trade and the
+   protocol in a task of the new trade. The call checks the trade restrictions and the data of the action, and returns
+   a future of the task.
 
 ## Reasons
 
