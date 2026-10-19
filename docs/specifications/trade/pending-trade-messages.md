@@ -19,7 +19,11 @@ processes it again when it processes the next message of a trade.
    protocol of its trade is no longer pending. A pending message of an existing trade whose sender is not the trade
    peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines. In Bisq Easy, a message arriving
    concurrently with the take offer request must reach the protocol when both deliveries finish. It must not remain
-   pending until an unrelated later message arrives.
+   pending until an unrelated later message arrives. Bisq Easy persists these messages in its private trade store,
+   preserving arrival order and the bound in rule 2 across restart. At startup, after loading trade restrictions,
+   it retries restored pending messages through the same checks as live messages. An invalid stored message does not
+   prevent restoration of the other messages. A snapshot taken during handoff to an existing trade must retain the
+   pending message or the resulting trade state (including any deferred message of that trade).
 2. A node keeps at most 100 pending messages. When a message arrives while the node keeps 100 pending messages, the
    node drops the oldest pending message and keeps the new one. A message which is already pending does not change
    the number or the order of the pending messages.
@@ -94,6 +98,10 @@ processes it again when it processes the next message of a trade.
 
 ## Compatibility
 
-- The rules change no message and no persisted data. The pending messages exist only in memory.
+- Network messages do not change. Bisq Easy adds an optional repeated field after the fields of version 2.1.14 in
+  its private trade store. Old stores load with no pending messages. Older applications ignore the added field and
+  drop pending messages when they save the store. MuSig pending messages, pending chat messages and pending mediator
+  responses still exist only in memory. Deferred messages of an existing Bisq Easy trade follow
+  [Bisq Easy message progress](bisq-easy-message-progress.md).
 - Rule 5 does not change when two mediator response messages are equal. The node identifies a pending response with
   its own key of trade ID and sender.

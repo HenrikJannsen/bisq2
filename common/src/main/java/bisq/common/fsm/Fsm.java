@@ -35,8 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Minimalistic finite state machine implementation inspired by <a href="https://github.com/j-easy/easy-states">easy-states</a>
  * <br/>
- * In case of out-of-order events we store the un-handled events (we do not persist it) and retry to apply those
- * pending states after the next state transition.
+ * In case of out-of-order events we store the unhandled events and retry to apply those events after the next state
+ * transition. Persistence of pending events is defined by the model.
  * The handling of out-of-order events only support unique event/state pairs. The out-of-order handling does not
  * support the use of the same event for multiple transitions. Though that is not a restriction of the transition config.
  * <br/>

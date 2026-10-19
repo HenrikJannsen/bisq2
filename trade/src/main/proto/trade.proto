@@ -115,12 +115,14 @@ message BisqEasyTrade {
   optional string paymentProof = 3;
   optional contract.Role interruptTradeInitiator = 4;
   optional sint64 tradeCompletedDate = 5;
+  repeated TradeMessage pendingMessages = 6;
 }
 
 message BisqEasyTradeStore {
   repeated Trade trades = 1;
   repeated string tradeIds = 2;
   repeated BisqEasyClosedTrade bisqEasyClosedTrades = 3;
+  repeated TradeMessage pendingMessages = 4;
 }
 
 // BisqEasy messages

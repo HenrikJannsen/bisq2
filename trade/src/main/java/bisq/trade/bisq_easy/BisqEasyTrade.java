@@ -17,6 +17,7 @@
 
 package bisq.trade.bisq_easy;
 
+import bisq.common.fsm.Event;
 import bisq.common.observable.Observable;
 import bisq.common.observable.ReadOnlyObservable;
 import bisq.common.proto.ProtobufUtils;
@@ -32,12 +33,16 @@ import bisq.trade.TradeParty;
 import bisq.trade.TradeRole;
 import bisq.trade.exceptions.TradeProtocolFailure;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
+import bisq.trade.bisq_easy.protocol.messages.BisqEasyTradeMessage;
+import bisq.trade.protocol.handler.TradeMessageHandler;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -86,14 +91,15 @@ public final class BisqEasyTrade extends Trade<BisqEasyOffer, BisqEasyContract, 
                           Identity myIdentity,
                           BisqEasyTradeParty taker,
                           BisqEasyTradeParty maker,
-                          TradeLifecycleState lifecycleState) {
-        super(contract, state, id, tradeRole, myIdentity, taker, maker, lifecycleState);
+                          TradeLifecycleState lifecycleState,
+                          Set<Event> pendingEvents) {
+        super(contract, state, id, tradeRole, myIdentity, taker, maker, lifecycleState, pendingEvents);
 
         stateObservable().addObserver(s -> tradeState.set((BisqEasyTradeState) s));
     }
 
     @Override
-    public bisq.trade.protobuf.Trade.Builder getBuilder(boolean serializeForHash) {
+    public synchronized bisq.trade.protobuf.Trade.Builder getBuilder(boolean serializeForHash) {
         return getTradeBuilder(serializeForHash).setBisqEasyTrade(toBisqEasyTradeProto(serializeForHash));
     }
 
@@ -113,20 +119,34 @@ public final class BisqEasyTrade extends Trade<BisqEasyOffer, BisqEasyContract, 
         getPaymentProof().ifPresent(builder::setPaymentProof);
         Optional.ofNullable(interruptTradeInitiator.get()).ifPresent(e -> builder.setInterruptTradeInitiator(e.toProtoEnum()));
         getTradeCompletedDate().ifPresent(builder::setTradeCompletedDate);
+        getEventQueue().stream()
+                .filter(BisqEasyTradeMessage.class::isInstance)
+                .map(BisqEasyTradeMessage.class::cast)
+                .forEach(message -> builder.addPendingMessages(message.<bisq.trade.protobuf.TradeMessage>resolveValueProto(serializeForHash)));
         return builder;
     }
 
     public static BisqEasyTrade fromProto(bisq.trade.protobuf.Trade proto) throws UnresolvableProtobufException {
         try {
             BisqEasyTradeState state = ProtobufUtils.enumFromProto(BisqEasyTradeState.class, proto.getState());
+            TradeRole tradeRole = TradeRole.fromProto(proto.getTradeRole());
+            BisqEasyTradeParty taker = TradeParty.protoToBisqEasyTradeParty(proto.getTaker());
+            BisqEasyTradeParty maker = TradeParty.protoToBisqEasyTradeParty(proto.getMaker());
+            NetworkId peerNetworkId = (tradeRole.isTaker() ? maker : taker).getNetworkId();
+            NetworkId myNetworkId = (tradeRole.isTaker() ? taker : maker).getNetworkId();
+            Set<Event> pendingMessages = ProtobufUtils.fromProtoStreamSkippingInvalid(
+                            proto.getBisqEasyTrade().getPendingMessagesList(), BisqEasyTradeMessage::fromProto)
+                    .filter(message -> TradeMessageHandler.isMessageOfTradePeer(message, proto.getId(), peerNetworkId, myNetworkId))
+                    .collect(Collectors.toSet());
             BisqEasyTrade trade = new BisqEasyTrade(BisqEasyContract.fromProto(proto.getContract()),
                     state,
                     proto.getId(),
-                    TradeRole.fromProto(proto.getTradeRole()),
+                    tradeRole,
                     Identity.fromProto(proto.getMyIdentity()),
-                    TradeParty.protoToBisqEasyTradeParty(proto.getTaker()),
-                    TradeParty.protoToBisqEasyTradeParty(proto.getMaker()),
-                    TradeLifecycleState.fromProto(proto.getLifecycleState()));
+                    taker,
+                    maker,
+                    TradeLifecycleState.fromProto(proto.getLifecycleState()),
+                    pendingMessages);
             if (proto.hasErrorMessage()) {
                 trade.setErrorMessage(proto.getErrorMessage());
             }

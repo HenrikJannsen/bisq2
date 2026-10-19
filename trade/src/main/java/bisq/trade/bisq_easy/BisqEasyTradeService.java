@@ -130,7 +130,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     private Pin authorizedAlertDataSetPin, numDaysAfterRedactingTradeDataPin, chatChannelsPin;
     @Nullable
     private Scheduler numDaysAfterRedactingTradeDataScheduler;
-    private final PendingTradeMessages<BisqEasyTradeMessage> pendingMessages = new PendingTradeMessages<>();
+    private final PendingTradeMessages<BisqEasyTradeMessage> pendingMessages = persistableStore.getPendingMessages();
     // The network layer delivers messages on several threads. The lock makes the check for an existing trade and the
     // adding of a new trade of a take offer request one step.
     @Getter(AccessLevel.NONE)
@@ -188,6 +188,8 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         // alerts must be known before it (see docs/specifications/network/startup-replay.md).
         authorizedAlertDataSetPin = alertService.getAuthorizedAlertDataSet().addObserver(this::updateTradeRestrictions);
 
+        // Restored early messages may now have a restored trade. Apply the same restrictions as live delivery.
+        pendingMessages.getMessagesInArrivalOrder().forEach(this::onMessage);
         networkService.subscribeToConfidentialMessages(this);
 
         numDaysAfterRedactingTradeDataScheduler = Scheduler.run(this::maybeRedactDataOfCompletedTrades)
@@ -271,14 +273,17 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                                 "for re-processing when the next message arrives.",
                         StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
                 pendingMessages.add(message);
-                return;
             }
+        }
+        if (optionalProtocol.isEmpty()) {
+            persist();
+            return;
         }
         BisqEasyProtocol protocol = optionalProtocol.orElseThrow();
         if (isMessageOfTradePeer(message, protocol)) {
             handleBisqEasyTradeMessage(message, protocol);
-        } else {
-            pendingMessages.remove(message);
+        } else if (pendingMessages.remove(message)) {
+            persist();
         }
     }
 
@@ -302,11 +307,13 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         if (pendingMessages.remove(message)) {
             log.info("We remove the message of type {} with tradeId {} from pendingMessages.",
                     message.getClass().getSimpleName(), StringUtils.sanitizeForLog(message.getTradeId()));
+            persist();
         }
 
         if (!pendingMessages.isEmpty()) {
             log.info("We have pendingMessages. We try to re-process them now.");
-            pendingMessages.getMessagesInArrivalOrder().forEach(this::handleBisqEasyTradeMessage);
+            // A ban or trading restriction may have changed while a message was pending, including across restart.
+            pendingMessages.getMessagesInArrivalOrder().forEach(this::onMessage);
         }
     }
 

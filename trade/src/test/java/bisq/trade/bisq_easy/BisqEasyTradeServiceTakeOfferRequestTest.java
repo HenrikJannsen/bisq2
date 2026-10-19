@@ -158,6 +158,29 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
     }
 
     @Test
+    void earlyMessageSurvivesRestartBeforeTheTakeOfferRequest() throws Exception {
+        BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
+        BisqEasyBtcAddressMessage addressMessage = new BisqEasyBtcAddressMessage("address-message",
+                request.getTradeId(), BisqEasyProtocol.VERSION, takerIdentity.getNetworkId(), offersNetworkId,
+                "bitcoin-address", contract.getOffer());
+        service.onMessage(addressMessage);
+        BisqEasyTradeStore restoredStore = BisqEasyTradeStore.fromProto(service.getPersistableStore().toProto(false));
+        service.shutdown().join();
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
+        service.getPersistableStore().applyPersisted(restoredStore);
+        service.initialize().join();
+
+        service.onMessage(request);
+
+        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        assertThat(trade.getBitcoinPaymentData()).contains("bitcoin-address");
+        assertThat(trade.getState()).isEqualTo(
+                BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__SELLER_DID_NOT_SENT_ACCOUNT_DATA__SELLER_RECEIVED_BTC_ADDRESS);
+        assertThat(service.getPendingMessages().isEmpty()).isTrue();
+    }
+
+    @Test
     void earlyMessageRacingWithProtocolCreationIsProcessedWithoutAnotherMessage() throws Exception {
         BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
         BisqEasyBtcAddressMessage addressMessage = new BisqEasyBtcAddressMessage("address-message",

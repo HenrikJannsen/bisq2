@@ -17,6 +17,7 @@
 
 package bisq.trade;
 
+import bisq.common.fsm.Event;
 import bisq.common.fsm.FsmModel;
 import bisq.common.fsm.State;
 import bisq.common.monetary.Monetary;
@@ -37,6 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Getter
@@ -99,7 +101,19 @@ public abstract class Trade<T extends Offer<?, ?>, C extends Contract<T>, P exte
                     P taker,
                     P maker,
                     TradeLifecycleState lifecycleState) {
-        super(state);
+        this(contract, state, id, tradeRole, myIdentity, taker, maker, lifecycleState, Set.of());
+    }
+
+    protected Trade(C contract,
+                    State state,
+                    String id,
+                    TradeRole tradeRole,
+                    Identity myIdentity,
+                    P taker,
+                    P maker,
+                    TradeLifecycleState lifecycleState,
+                    Set<Event> pendingEvents) {
+        super(state, pendingEvents, Set.of());
 
         this.contract = contract;
         this.id = id;

@@ -24,6 +24,8 @@ import bisq.common.proto.UnresolvableProtobufException;
 import bisq.common.proto.UnresolvableProtobufMessageException;
 import bisq.persistence.PersistableStore;
 import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
+import bisq.trade.bisq_easy.protocol.messages.BisqEasyTradeMessage;
+import bisq.trade.protocol.messages.PendingTradeMessages;
 import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -31,6 +33,7 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -45,16 +48,31 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
     // We keep track of all trades by storing the trade IDs to avoid that the same trade can be taken again.
     private final ObservableSet<String> tradeIds = new ObservableSet<>();
     private final ObservableSet<BisqEasyClosedTrade> closedTrades = new ObservableSet<>();
+    private final PendingTradeMessages<BisqEasyTradeMessage> pendingMessages = new PendingTradeMessages<>();
 
     BisqEasyTradeStore(Set<BisqEasyTrade> trades, Set<String> tradeIds, Set<BisqEasyClosedTrade> closedTrades) {
+        this(trades, tradeIds, closedTrades, List.of());
+    }
+
+    BisqEasyTradeStore(Set<BisqEasyTrade> trades,
+                      Set<String> tradeIds,
+                      Set<BisqEasyClosedTrade> closedTrades,
+                      List<BisqEasyTradeMessage> pendingMessages) {
         this.trades.setAll(trades);
         this.tradeIds.setAll(tradeIds);
         this.closedTrades.setAll(closedTrades);
+        pendingMessages.forEach(this.pendingMessages::add);
     }
 
     @Override
     public bisq.trade.protobuf.BisqEasyTradeStore.Builder getBuilder(boolean serializeForHash) {
+        // Snapshot the source queue before its target trades. A concurrent handoff can then appear twice, but
+        // cannot disappear between an old trade snapshot and a newer queue snapshot.
+        List<BisqEasyTradeMessage> pendingSnapshot = pendingMessages.getMessagesInArrivalOrder();
         return bisq.trade.protobuf.BisqEasyTradeStore.newBuilder()
+                .addAllPendingMessages(pendingSnapshot.stream()
+                        .map(message -> message.<bisq.trade.protobuf.TradeMessage>resolveValueProto(serializeForHash))
+                        .toList())
                 .addAllTrades(trades.stream()
                         .map(trade -> {
                             try {
@@ -94,7 +112,10 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
             var closedTrades = ProtobufUtils.fromProtoStreamSkippingInvalid(proto.getBisqEasyClosedTradesList(),
                             BisqEasyClosedTrade::fromProto)
                     .collect(Collectors.toSet());
-            return new BisqEasyTradeStore(trades, new HashSet<>(proto.getTradeIdsList()), closedTrades);
+            List<BisqEasyTradeMessage> pendingMessages = ProtobufUtils.fromProtoStreamSkippingInvalid(
+                            proto.getPendingMessagesList(), BisqEasyTradeMessage::fromProto)
+                    .toList();
+            return new BisqEasyTradeStore(trades, new HashSet<>(proto.getTradeIdsList()), closedTrades, pendingMessages);
         } catch (RuntimeException e) {
             throw new UnresolvableProtobufException(e);
         }
@@ -113,7 +134,8 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
 
     @Override
     public BisqEasyTradeStore getClone() {
-        return new BisqEasyTradeStore(Set.copyOf(trades), Set.copyOf(tradeIds), Set.copyOf(closedTrades));
+        List<BisqEasyTradeMessage> pendingSnapshot = pendingMessages.getMessagesInArrivalOrder();
+        return new BisqEasyTradeStore(Set.copyOf(trades), Set.copyOf(tradeIds), Set.copyOf(closedTrades), pendingSnapshot);
     }
 
     @Override
@@ -121,6 +143,8 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
         trades.setAll(persisted.getTrades());
         tradeIds.setAll(persisted.getTradeIds());
         closedTrades.setAll(persisted.getClosedTrades());
+        pendingMessages.clear();
+        persisted.getPendingMessages().getMessagesInArrivalOrder().forEach(pendingMessages::add);
     }
 
     ObservableSet<BisqEasyTrade> getAllTrades() {
