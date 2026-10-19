@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @EqualsAndHashCode
 @ToString
-final class CollectionChangeMapper<S, T> implements CollectionObserver<S> {
+public final class CollectionChangeMapper<S, T> implements CollectionObserver<S> {
     private static final int MAX_LOGGED_STACK_TRACE_LINES = 10;
 
     private final Collection<T> targetCollection;
@@ -53,10 +53,10 @@ final class CollectionChangeMapper<S, T> implements CollectionObserver<S> {
     private final Function<S, T> mapFunction;
     private final Consumer<Runnable> executor;
 
-    CollectionChangeMapper(Collection<T> targetCollection,
-                           Function<S, Boolean> filterFunction,
-                           Function<S, T> mapFunction,
-                           Consumer<Runnable> executor) {
+    public CollectionChangeMapper(Collection<T> targetCollection,
+                                  Function<S, Boolean> filterFunction,
+                                  Function<S, T> mapFunction,
+                                  Consumer<Runnable> executor) {
         this.targetCollection = targetCollection;
         this.filterFunction = filterFunction;
         this.mapFunction = mapFunction;
