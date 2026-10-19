@@ -504,7 +504,10 @@ public class TradeWizardReviewController implements Controller {
             new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.marketPriceNotCurrent")).show();
             return;
         }
-        BisqEasyTrade trade = bisqEasyProtocol.getModel();
+        continueTakeOffer(bisqEasyOffer, bisqEasyProtocol.getModel(), mediator);
+    }
+
+    private void continueTakeOffer(BisqEasyOffer bisqEasyOffer, BisqEasyTrade trade, Optional<UserProfile> mediator) {
         log.info("Selected mediator for trade {}: {}", trade.getShortId(), mediator.map(UserProfile::getUserName).orElse("N/A"));
         model.setBisqEasyTrade(trade);
 
