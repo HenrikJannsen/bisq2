@@ -43,9 +43,8 @@ public class PersistenceService {
 
     @Getter
     private final Path appDataDirPath;
-    @Getter
-    protected final List<PersistenceClient<? extends PersistableProto>> clients = new CopyOnWriteArrayList<>();
-    protected final List<Persistence<? extends PersistableProto>> persistenceInstances = new CopyOnWriteArrayList<>();
+    private final List<PersistenceClient<? extends PersistableProto>> clients = new CopyOnWriteArrayList<>();
+    private final List<Persistence<? extends PersistableProto>> persistenceInstances = new CopyOnWriteArrayList<>();
     @Getter
     private final RestoreService restoreService = new RestoreService();
     @Getter
@@ -54,6 +53,10 @@ public class PersistenceService {
     public PersistenceService(Path appDataDirPath) {
         this.appDataDirPath = appDataDirPath;
         unreadableStoreArchive = new UnreadableStoreArchive(appDataDirPath.resolve(Paths.get("db", "unreadable")));
+    }
+
+    public int getNumClients() {
+        return clients.size();
     }
 
     public <T extends PersistableStore<T>> Persistence<T> getOrCreatePersistence(PersistenceClient<T> client,

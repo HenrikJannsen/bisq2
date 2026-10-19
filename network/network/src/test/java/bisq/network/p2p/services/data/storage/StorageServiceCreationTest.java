@@ -93,7 +93,7 @@ class StorageServiceCreationTest {
 
             assertSame(first.get(5, SECONDS), second.get(5, SECONDS));
             assertEquals(1, registrations.get());
-            assertEquals(1, persistenceService.getClients().size());
+            assertEquals(1, persistenceService.getNumClients());
         } finally {
             allowRegistration.countDown();
             executor.shutdownNow();
