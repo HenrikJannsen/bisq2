@@ -52,9 +52,8 @@ import bisq.support.SupportService;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
 import bisq.trade.TradeRestrictedException;
 import bisq.trade.TradeService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
-import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.trade.exceptions.TradeProtocolException;
 import bisq.user.UserService;
 import bisq.user.banned.BannedUserService;
@@ -88,6 +87,8 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -233,63 +234,49 @@ public class TradeRestApi extends RestApiBase {
             long marketPrice = marketPriceService.findMarketPrice(bisqEasyOffer.getMarket())
                     .map(e -> e.getPriceQuote().getValue())
                     .orElseThrow();
-            BisqEasyProtocol bisqEasyProtocol = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
+            var attempt = tradeActionService.takeOffer(() -> bisqEasyTradeService.takerCreatesTrade(takerIdentity.getIdentity(),
                     bisqEasyOffer,
                     baseSideAmount,
                     quoteSideAmount,
                     bitcoinPaymentMethodSpec,
                     fiatPaymentMethodSpec,
                     mediator,
-                    marketPrice);
-            BisqEasyTrade bisqEasyTrade = bisqEasyProtocol.getModel();
-            log.info("Selected mediator for trade {}: {}", bisqEasyTrade.getShortId(), mediator.map(UserProfile::getUserName).orElse("N/A"));
+                    marketPrice), bisqEasyTradeService, takerIdentity);
+            attempt.result().whenCompleteAsync((trade, error) -> {
+                if (error != null) {
+                    resumeTradeFailure(asyncResponse, error);
+                    return;
+                }
+                try {
+                    bisqEasyOfferbookChannelService.findChannel(trade.getOffer().getMarket())
+                            .ifPresent(offerbookChannelSelectionService::selectChannel);
+                    var snapshot = trade.getSnapshot();
+                    String errorStackTrace = snapshot.errorStackTrace() == null ? "" : StringUtils.truncate(snapshot.errorStackTrace(), 500);
+                    checkArgument(snapshot.errorMessage() == null, "An error occurred at taking the offer: " + snapshot.errorMessage() +
+                            ". ErrorStackTrace: " + errorStackTrace);
+                    String peersErrorStackTrace = snapshot.peersErrorStackTrace() == null ? "" : StringUtils.truncate(snapshot.peersErrorStackTrace(), 500);
+                    checkArgument(snapshot.peersErrorMessage() == null, "An error occurred at the peers side at taking the offer: " + snapshot.peersErrorMessage() +
+                            ". ErrorStackTrace: " + peersErrorStackTrace);
+                    asyncResponse.resume(buildResponse(Response.Status.CREATED, new TakeOfferResponse(trade.getId())));
+                } catch (Exception failure) {
+                    resumeTradeFailure(asyncResponse, failure);
+                }
+            });
+        } catch (Exception error) {
+            resumeTradeFailure(asyncResponse, error);
+        }
+    }
 
-            bisqEasyTradeService.takeOffer(bisqEasyTrade);
-            BisqEasyContract contract = bisqEasyTrade.getContract();
-
-            String tradeId = bisqEasyTrade.getId();
-            bisqEasyOpenTradeChannelService.sendTakeOfferMessage(tradeId, bisqEasyOffer, contract.getMediator())
-                    .thenAccept(result ->
-                            {
-                                // In case the user has switched to another market we want to select that market in the offer book
-                                bisqEasyOfferbookChannelService.findChannel(contract.getOffer().getMarket())
-                                        .ifPresent(offerbookChannelSelectionService::selectChannel);
-                                bisqEasyOpenTradeChannelService.findChannelByTradeId(tradeId)
-                                        .ifPresent(channel -> {
-                                            String taker = userIdentityService.getSelectedUserIdentity().getUserProfile().getUserName();
-                                            String maker = channel.getPeer().getUserName();
-                                            String encoded = Res.encode("bisqEasy.takeOffer.tradeLogMessage", taker, maker);
-                                            bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
-                                        });
-                            }
-                    )
-                    .get();
-
-            // After the take offer is completed we check if errors happened
-            String errorMessage = bisqEasyTrade.errorMessageObservable().get();
-            String errorStackTrace = bisqEasyTrade.getErrorStackTrace() != null ? StringUtils.truncate(bisqEasyTrade.getErrorStackTrace(), 500) : "";
-            checkArgument(errorMessage == null, "An error occurred at taking the offer: " + errorMessage +
-                    ". ErrorStackTrace: " + errorStackTrace);
-
-            String peersErrorMessage = bisqEasyTrade.peersErrorMessageObservable().get();
-            String peersErrorStackTrace = bisqEasyTrade.getPeersErrorStackTrace() != null ? StringUtils.truncate(bisqEasyTrade.getPeersErrorStackTrace(), 500) : "";
-            checkArgument(peersErrorMessage == null, "An error occurred at the peers side at taking the offer: " + peersErrorMessage +
-                    ". ErrorStackTrace: " + peersErrorStackTrace);
-
-            asyncResponse.resume(buildResponse(Response.Status.CREATED, new TakeOfferResponse(bisqEasyTrade.getId())));
-        } catch (InterruptedException e) {
-            log.warn("Thread got interrupted at takeOffer method", e);
-            Thread.currentThread().interrupt(); // Restore interrupted state
-            asyncResponse.resume(buildErrorResponse("Thread was interrupted."));
-        } catch (TradeRestrictedException e) {
-            asyncResponse.resume(buildResponse(Response.Status.BAD_REQUEST, toTradeRestrictedErrorEntity(e)));
-        } catch (IllegalArgumentException e) {
-            asyncResponse.resume(buildResponse(Response.Status.BAD_REQUEST, "Invalid input: " + e.getMessage()));
-        } catch (TradeProtocolException e) {
-            // The seller's reputation does not cover the amount (docs/specifications/trade/bisq-easy-seller-reputation-limit.md)
-            asyncResponse.resume(buildResponse(Response.Status.BAD_REQUEST, "Invalid input: " + e.getMessage()));
-        } catch (Exception e) {
-            asyncResponse.resume(buildErrorResponse("An unexpected error occurred: " + e.getMessage()));
+    private void resumeTradeFailure(AsyncResponse response, Throwable error) {
+        while (error instanceof CompletionException && error.getCause() != null) {
+            error = error.getCause();
+        }
+        if (error instanceof TradeRestrictedException restricted) {
+            response.resume(buildResponse(Response.Status.BAD_REQUEST, toTradeRestrictedErrorEntity(restricted)));
+        } else if (error instanceof IllegalArgumentException || error instanceof TradeProtocolException) {
+            response.resume(buildResponse(Response.Status.BAD_REQUEST, "Invalid input: " + error.getMessage()));
+        } else {
+            response.resume(buildErrorResponse("An unexpected error occurred: " + error.getMessage()));
         }
     }
 
@@ -336,17 +323,17 @@ public class TradeRestApi extends RestApiBase {
                 return;
             }
 
-            Optional<BisqEasyTrade> optionalTrade = bisqEasyTradeService.findTrade(tradeId);
+            Optional<BisqEasyTradeReadModel> optionalTrade = bisqEasyTradeService.findTrade(tradeId);
             if (optionalTrade.isEmpty()) {
                 asyncResponse.resume(buildResponse(Response.Status.NOT_FOUND, "Trade not found for ID " + tradeId));
                 return;
             }
 
             BisqEasyOpenTradeChannel channel = optionalChannel.get();
-            BisqEasyTrade trade = optionalTrade.get();
+            BisqEasyTradeReadModel trade = optionalTrade.get();
             String userName = channel.getMyUserIdentity().getUserName();
             BitcoinPaymentRail paymentRail = trade.getContract().getBaseSidePaymentMethodSpec().getPaymentMethod().getPaymentRail();
-            switch (tradeEvent.tradeEventType()) {
+            CompletableFuture<Void> action = switch (tradeEvent.tradeEventType()) {
                 case REJECT_TRADE -> handleRejectTrade(channel, trade, userName);
                 case CANCEL_TRADE -> handleCancelTrade(channel, trade, userName);
                 case CLOSE_TRADE -> handleCloseTrade(channel, trade);
@@ -359,69 +346,70 @@ public class TradeRestApi extends RestApiBase {
                 case SELLER_CONFIRM_BTC_SENT ->
                         handleSellerConfirmBtcSent(channel, trade, tradeEvent, paymentRail, userName);
                 case BTC_CONFIRMED -> handleBtcConfirmed(channel, trade, paymentRail, userName);
-            }
-            asyncResponse.resume(buildNoContentResponse());
-        } catch (TradeRestrictedException e) {
-            asyncResponse.resume(buildResponse(Response.Status.BAD_REQUEST, toTradeRestrictedErrorEntity(e)));
-        } catch (IllegalArgumentException e) {
-            asyncResponse.resume(buildResponse(Response.Status.BAD_REQUEST, "Invalid input: " + e.getMessage()));
-        } catch (Exception e) {
-            asyncResponse.resume(buildErrorResponse("An unexpected error occurred: " + e.getMessage()));
+            };
+            action.whenCompleteAsync((ignored, error) -> {
+                if (error == null) {
+                    asyncResponse.resume(buildNoContentResponse());
+                } else {
+                    resumeTradeFailure(asyncResponse, error);
+                }
+            });
+        } catch (Exception error) {
+            resumeTradeFailure(asyncResponse, error);
         }
     }
 
-    private void handleRejectTrade(BisqEasyOpenTradeChannel channel,
-                                   BisqEasyTrade trade,
-                                   String userName) throws Exception {
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.rejectTrade(trade), channel, () -> {
+    private CompletableFuture<Void> handleRejectTrade(BisqEasyOpenTradeChannel channel,
+                                   BisqEasyTradeReadModel trade,
+                                   String userName) {
+        return tradeActionService.executeAndAwaitTradeLog(() -> bisqEasyTradeService.rejectTrade(trade), channel, () -> {
             String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
             return encoded;
-        }).get();
+        });
     }
 
-    private void handleCancelTrade(BisqEasyOpenTradeChannel channel,
-                                   BisqEasyTrade trade,
-                                   String userName) throws Exception {
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.cancelTrade(trade), channel, () -> {
+    private CompletableFuture<Void> handleCancelTrade(BisqEasyOpenTradeChannel channel,
+                                   BisqEasyTradeReadModel trade,
+                                   String userName) {
+        return tradeActionService.executeAndAwaitTradeLog(() -> bisqEasyTradeService.cancelTrade(trade), channel, () -> {
             String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
             return encoded;
-        }).get();
+        });
     }
 
-    private void handleCloseTrade(BisqEasyOpenTradeChannel channel, BisqEasyTrade trade) throws Exception {
-        bisqEasyTradeService.closeTrade(trade, channel.getMyUserIdentity().getUserProfile(), channel.getPeer());
-        leavePrivateChatManager.leaveChannel(channel);
+    private CompletableFuture<Void> handleCloseTrade(BisqEasyOpenTradeChannel channel, BisqEasyTradeReadModel trade) {
+        return tradeActionService.closeTrade(bisqEasyTradeService, leavePrivateChatManager, trade, channel);
     }
 
-    private void handleSellerSendsPaymentAccount(BisqEasyOpenTradeChannel channel,
-                                                 BisqEasyTrade trade,
+    private CompletableFuture<Void> handleSellerSendsPaymentAccount(BisqEasyOpenTradeChannel channel,
+                                                 BisqEasyTradeReadModel trade,
                                                  TradeEventDto tradeEvent,
-                                                 String userName) throws Exception {
+                                                 String userName) {
         String paymentAccountData = checkNotNull(tradeEvent.data(), "paymentAccountData must not be null");
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerSendsPaymentAccount(trade, paymentAccountData), channel, () -> {
+        return tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerSendsPaymentAccount(trade, paymentAccountData), channel, () -> {
             String encoded = Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage", userName, paymentAccountData);
             return encoded;
         });
     }
 
-    private void handleBuyerSendBitcoinPaymentData(BisqEasyOpenTradeChannel channel,
-                                                   BisqEasyTrade trade,
+    private CompletableFuture<Void> handleBuyerSendBitcoinPaymentData(BisqEasyOpenTradeChannel channel,
+                                                   BisqEasyTradeReadModel trade,
                                                    TradeEventDto tradeEvent,
                                                    BitcoinPaymentRail paymentRail,
-                                                   String userName) throws Exception {
+                                                   String userName) {
         String btcRailName = paymentRail.name();
         String key = "bisqEasy.tradeState.info.buyer.phase1a.tradeLogMessage." + btcRailName;
         String bitcoinPaymentData = checkNotNull(tradeEvent.data(), "bitcoinPaymentData must not be null");
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData), channel, () -> {
+        return tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData), channel, () -> {
             String encoded = Res.encode(key, userName, bitcoinPaymentData);
             return encoded;
         });
     }
 
-    private void handleSellerConfirmFiatReceipt(BisqEasyOpenTradeChannel channel,
-                                                BisqEasyTrade trade,
-                                                String userName) throws Exception {
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerConfirmFiatReceipt(trade), channel, () -> {
+    private CompletableFuture<Void> handleSellerConfirmFiatReceipt(BisqEasyOpenTradeChannel channel,
+                                                BisqEasyTradeReadModel trade,
+                                                String userName) {
+        return tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerConfirmFiatReceipt(trade), channel, () -> {
             long quoteSideAmount = trade.getContract().getQuoteSideAmount();
             String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
             String formattedQuoteAmount = AmountFormatter.formatQuoteAmountWithCode(Fiat.from(quoteSideAmount, quoteCurrencyCode));
@@ -430,27 +418,27 @@ public class TradeRestApi extends RestApiBase {
         });
     }
 
-    private void handleBuyerConfirmFiatSent(BisqEasyOpenTradeChannel channel,
-                                            BisqEasyTrade trade,
-                                            String userName) throws Exception {
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.buyerConfirmFiatSent(trade), channel, () -> {
+    private CompletableFuture<Void> handleBuyerConfirmFiatSent(BisqEasyOpenTradeChannel channel,
+                                            BisqEasyTradeReadModel trade,
+                                            String userName) {
+        return tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.buyerConfirmFiatSent(trade), channel, () -> {
             String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
             String encoded = Res.encode("bisqEasy.tradeState.info.buyer.phase2a.tradeLogMessage", userName, quoteCurrencyCode);
             return encoded;
         });
     }
 
-    private void handleSellerConfirmBtcSent(BisqEasyOpenTradeChannel channel,
-                                            BisqEasyTrade trade,
+    private CompletableFuture<Void> handleSellerConfirmBtcSent(BisqEasyOpenTradeChannel channel,
+                                            BisqEasyTradeReadModel trade,
                                             TradeEventDto tradeEvent,
                                             BitcoinPaymentRail paymentRail,
-                                            String userName) throws Exception {
+                                            String userName) {
         Optional<String> paymentProof = Optional.ofNullable(tradeEvent.data());
         boolean isMainChain = paymentRail.equals(BitcoinPaymentRail.MAIN_CHAIN);
         if (isMainChain) {
             checkArgument(paymentProof.isPresent(), "Transaction ID is required for Bitcoin settlement");
         }
-        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerConfirmBtcSent(trade, paymentProof), channel, () -> {
+        return tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerConfirmBtcSent(trade, paymentProof), channel, () -> {
             String encoded;
             if (paymentProof.isEmpty()) {
                 encoded = Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.noProofProvided", userName);
@@ -463,15 +451,15 @@ public class TradeRestApi extends RestApiBase {
         });
     }
 
-    private void handleBtcConfirmed(BisqEasyOpenTradeChannel channel,
-                                    BisqEasyTrade trade,
+    private CompletableFuture<Void> handleBtcConfirmed(BisqEasyOpenTradeChannel channel,
+                                    BisqEasyTradeReadModel trade,
                                     BitcoinPaymentRail paymentRail,
-                                    String userName) throws Exception {
-        bisqEasyTradeService.btcConfirmed(trade);
+                                    String userName) {
         if (paymentRail.equals(BitcoinPaymentRail.LN) && trade.isBuyer()) {
-            String encoded = Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", userName);
-            bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+            return tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.btcConfirmed(trade), channel,
+                    () -> Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", userName));
         }
+        return bisqEasyTradeService.btcConfirmed(trade);
     }
 
     @POST
@@ -496,7 +484,7 @@ public class TradeRestApi extends RestApiBase {
         });
 
         try {
-            Optional<BisqEasyTrade> optionalTrade = bisqEasyTradeService.findTrade(tradeId);
+            Optional<BisqEasyTradeReadModel> optionalTrade = bisqEasyTradeService.findTrade(tradeId);
             if (optionalTrade.isEmpty()) {
                 asyncResponse.resume(buildResponse(Response.Status.NOT_FOUND, "Trade not found for ID " + tradeId));
                 return;
@@ -508,7 +496,7 @@ public class TradeRestApi extends RestApiBase {
                 return;
             }
 
-            BisqEasyTrade trade = optionalTrade.get();
+            BisqEasyTradeReadModel trade = optionalTrade.get();
             BisqEasyOpenTradeChannel channel = optionalChannel.get();
             BisqEasyContract contract = trade.getContract();
 

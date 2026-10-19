@@ -27,7 +27,7 @@ import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.components.table.DateTableItem;
 import bisq.presentation.formatters.DateFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeFormatter;
 import bisq.user.profile.UserProfile;
 import bisq.user.profile.UserProfileService;
@@ -48,7 +48,7 @@ class OpenTradeListItem implements DateTableItem {
     @EqualsAndHashCode.Include
     private final BisqEasyOpenTradeChannel channel;
     @EqualsAndHashCode.Include
-    private final BisqEasyTrade trade;
+    private final BisqEasyTradeReadModel trade;
 
     private final UserProfile myUserProfile, peersUserProfile;
     private final String offerId, tradeId, shortTradeId, myUserName, directionalTitle, peersUserName, dateString, timeString,
@@ -69,7 +69,7 @@ class OpenTradeListItem implements DateTableItem {
     private boolean isInMediation;
 
     public OpenTradeListItem(BisqEasyOpenTradeChannel channel,
-                             BisqEasyTrade trade,
+                             BisqEasyTradeReadModel trade,
                              ReputationService reputationService,
                              ChatNotificationService chatNotificationService,
                              UserProfileService userProfileService) {

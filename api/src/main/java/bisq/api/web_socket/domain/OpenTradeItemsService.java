@@ -28,7 +28,7 @@ import bisq.common.observable.collection.ObservableArray;
 import bisq.api.dto.presentation.open_trades.TradeItemPresentationDto;
 import bisq.api.dto.presentation.open_trades.TradeItemPresentationDtoFactory;
 import bisq.trade.TradeService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.user.UserService;
 import bisq.user.profile.UserProfileService;
@@ -73,14 +73,14 @@ public class OpenTradeItemsService implements Service {
     public CompletableFuture<Boolean> initialize() {
         tradesPin = bisqEasyTradeService.getTrades().addObserver(new CollectionObserver<>() {
             @Override
-            public void onAdded(BisqEasyTrade trade) {
+            public void onAdded(BisqEasyTradeReadModel trade) {
                 handleTradeAdded(trade);
             }
 
             @Override
             public void onRemoved(Object element) {
-                if (element instanceof BisqEasyTrade) {
-                    handleTradeRemoved((BisqEasyTrade) element);
+                if (element instanceof BisqEasyTradeReadModel) {
+                    handleTradeRemoved((BisqEasyTradeReadModel) element);
                 }
             }
 
@@ -130,13 +130,13 @@ public class OpenTradeItemsService implements Service {
     }
 
     // Trade
-    private void handleTradeAdded(BisqEasyTrade trade) {
+    private void handleTradeAdded(BisqEasyTradeReadModel trade) {
         channelService.findChannelByTradeId(trade.getId())
                 .ifPresentOrElse(channel -> handleTradeAndChannelAdded(trade, channel),
                         () -> log.warn("Trade with id {} was added but associated channel is not found.", trade.getId()));
     }
 
-    private void handleTradeRemoved(BisqEasyTrade trade) {
+    private void handleTradeRemoved(BisqEasyTradeReadModel trade) {
         String tradeId = trade.getId();
         channelService.findChannelByTradeId(tradeId)
                 .ifPresentOrElse(channel -> handleTradeAndChannelRemoved(trade),
@@ -191,7 +191,7 @@ public class OpenTradeItemsService implements Service {
     }
 
     // TradeAndChannel
-    private void handleTradeAndChannelAdded(BisqEasyTrade trade, BisqEasyOpenTradeChannel channel) {
+    private void handleTradeAndChannelAdded(BisqEasyTradeReadModel trade, BisqEasyOpenTradeChannel channel) {
         if (findListItem(trade).isPresent()) {
             log.debug("We got called handleTradeAndChannelAdded but we have that trade list item already. " +
                     "This is expected as we get called both when a trade is added and the associated channel.");
@@ -214,7 +214,7 @@ public class OpenTradeItemsService implements Service {
     }
 
 
-    private void handleTradeAndChannelRemoved(BisqEasyTrade trade) {
+    private void handleTradeAndChannelRemoved(BisqEasyTradeReadModel trade) {
         String tradeId = trade.getId();
         if (findListItem(trade).isEmpty()) {
             log.warn("We got called handleTradeAndChannelRemoved but we have not found any trade list item with tradeId {}", tradeId);
@@ -239,7 +239,7 @@ public class OpenTradeItemsService implements Service {
         updateIsAnyTradeInMediation();
     }
 
-    private Optional<TradeItemPresentationDto> findListItem(BisqEasyTrade trade) {
+    private Optional<TradeItemPresentationDto> findListItem(BisqEasyTradeReadModel trade) {
         return findListItem(trade.getId());
     }
 

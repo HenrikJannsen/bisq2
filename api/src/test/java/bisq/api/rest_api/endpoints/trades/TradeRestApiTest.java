@@ -40,7 +40,7 @@ import bisq.support.SupportService;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
 import bisq.trade.TradeRestrictedException;
 import bisq.trade.TradeService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.exceptions.TradeProtocolException;
 import bisq.trade.exceptions.TradeProtocolFailure;
@@ -56,12 +56,15 @@ import org.mockito.ArgumentCaptor;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -117,7 +120,7 @@ class TradeRestApiTest {
 
         String tradeId = "trade-1";
         BisqEasyOpenTradeChannel channel = mock(BisqEasyOpenTradeChannel.class, RETURNS_DEEP_STUBS);
-        BisqEasyTrade trade = mock(BisqEasyTrade.class);
+        BisqEasyTradeReadModel trade = mock(BisqEasyTradeReadModel.class);
         BisqEasyContract contract = mock(BisqEasyContract.class);
         BitcoinPaymentMethodSpec paymentMethodSpec = mock(BitcoinPaymentMethodSpec.class);
         BitcoinPaymentMethod paymentMethod = mock(BitcoinPaymentMethod.class);
@@ -129,8 +132,8 @@ class TradeRestApiTest {
         when(paymentMethod.getPaymentRail()).thenReturn(BitcoinPaymentRail.MAIN_CHAIN);
 
         // The guarded trade action throws because a security manager alert disallows trading.
-        doThrow(TradeRestrictedException.minVersionRequired("2.1.12"))
-                .when(bisqEasyTradeService).buyerConfirmFiatSent(trade);
+        when(bisqEasyTradeService.buyerConfirmFiatSent(trade))
+                .thenReturn(CompletableFuture.failedFuture(TradeRestrictedException.minVersionRequired("2.1.12")));
 
         AsyncResponse asyncResponse = mock(AsyncResponse.class);
         TradeEventDto event = new TradeEventDto(TradeEventTypeDto.BUYER_CONFIRM_FIAT_SENT, null);
@@ -139,7 +142,7 @@ class TradeRestApiTest {
 
         // The restriction surfaces as a structured 400 (not a generic 500) with the machine-readable code.
         ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
-        verify(asyncResponse).resume(captor.capture());
+        verify(asyncResponse, timeout(5000)).resume(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(Response.Status.BAD_REQUEST.getStatusCode());
         Map<String, String> entity = (Map<String, String>) captor.getValue().getEntity();
         assertThat(entity.get("errorCode")).isEqualTo("MIN_VERSION_REQUIRED");
@@ -157,7 +160,7 @@ class TradeRestApiTest {
 
         String tradeId = "trade-1";
         BisqEasyOpenTradeChannel channel = mock(BisqEasyOpenTradeChannel.class, RETURNS_DEEP_STUBS);
-        BisqEasyTrade trade = mock(BisqEasyTrade.class);
+        BisqEasyTradeReadModel trade = mock(BisqEasyTradeReadModel.class);
         BisqEasyContract contract = mock(BisqEasyContract.class);
         BitcoinPaymentMethodSpec paymentMethodSpec = mock(BitcoinPaymentMethodSpec.class);
         BitcoinPaymentMethod paymentMethod = mock(BitcoinPaymentMethod.class);
@@ -171,8 +174,8 @@ class TradeRestApiTest {
         // The buyer's node refuses data which requests another amount than the trade amount.
         String bitcoinPaymentData = "bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4?amount=0.01";
         String refusal = "Bitcoin payment data must not request another amount than the trade amount";
-        doThrow(new IllegalArgumentException(refusal))
-                .when(bisqEasyTradeService).buyerSendBitcoinPaymentData(trade, bitcoinPaymentData);
+        when(bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalArgumentException(refusal)));
 
         AsyncResponse asyncResponse = mock(AsyncResponse.class);
         TradeEventDto event = new TradeEventDto(TradeEventTypeDto.BUYER_SEND_BITCOIN_PAYMENT_DATA, bitcoinPaymentData);
@@ -181,7 +184,7 @@ class TradeRestApiTest {
 
         // The refusal surfaces as invalid input (not a generic 500), as at taking an offer.
         ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
-        verify(asyncResponse).resume(captor.capture());
+        verify(asyncResponse, timeout(5000)).resume(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(Response.Status.BAD_REQUEST.getStatusCode());
         assertThat(captor.getValue().getEntity()).isEqualTo("Invalid input: " + refusal);
 
@@ -216,8 +219,8 @@ class TradeRestApiTest {
 
         // The buyer's node refuses the take because the seller's reputation does not cover the amount
         String refusal = "The seller's reputation score of 0 is too low for the trade amount.";
-        doThrow(new TradeProtocolException(refusal, TradeProtocolFailure.SELLER_REPUTATION_TOO_LOW))
-                .when(bisqEasyTradeService).takerCreatesProtocol(any(), any(), any(), any(), any(), any(), any(), anyLong());
+        when(bisqEasyTradeService.takerCreatesTrade(any(), any(), any(), any(), any(), any(), any(), anyLong()))
+                .thenReturn(CompletableFuture.failedFuture(new TradeProtocolException(refusal, TradeProtocolFailure.SELLER_REPUTATION_TOO_LOW)));
 
         AsyncResponse asyncResponse = mock(AsyncResponse.class);
         TakeOfferRequest request = new TakeOfferRequest("offer-1", 100_000, 1_000_0000, "MAIN_CHAIN", "SEPA");
@@ -226,10 +229,43 @@ class TradeRestApiTest {
 
         // The refusal surfaces as invalid input (not a generic 500)
         ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
-        verify(asyncResponse).resume(captor.capture());
+        verify(asyncResponse, timeout(5000)).resume(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(Response.Status.BAD_REQUEST.getStatusCode());
         assertThat(captor.getValue().getEntity()).isEqualTo("Invalid input: " + refusal);
         verify(bisqEasyTradeService, never()).takeOffer(any());
+    }
+
+    @Test
+    void paymentAccountLogAndHttpSuccessWaitForTheCommand() throws Exception {
+        var channels = mock(BisqEasyOpenTradeChannelService.class);
+        var trades = mock(BisqEasyTradeService.class);
+        var api = newTradeRestApi(channels, trades);
+        var channel = mock(BisqEasyOpenTradeChannel.class, RETURNS_DEEP_STUBS);
+        var trade = mock(BisqEasyTradeReadModel.class, RETURNS_DEEP_STUBS);
+        when(channels.findChannelByTradeId("trade-id")).thenReturn(Optional.of(channel));
+        when(trades.findTrade("trade-id")).thenReturn(Optional.of(trade));
+        when(trade.getContract().getBaseSidePaymentMethodSpec()).thenReturn(new BitcoinPaymentMethodSpec(BitcoinPaymentMethod.fromPaymentRail(BitcoinPaymentRail.MAIN_CHAIN)));
+        when(channel.getMyUserIdentity().getUserName()).thenReturn("Seller");
+        var command = new CompletableFuture<Void>();
+        when(trades.sellerSendsPaymentAccount(trade, "Private account")).thenReturn(command);
+        var logStarted = new CompletableFuture<String>();
+        var delivery = new CompletableFuture<bisq.network.SendMessageResult>();
+        when(channels.sendTradeLogMessage(any(), any())).thenAnswer(invocation -> {
+            logStarted.complete(invocation.getArgument(0));
+            return delivery;
+        });
+        var response = mock(AsyncResponse.class);
+        var resumed = new CompletableFuture<Response>();
+        doAnswer(invocation -> { resumed.complete(invocation.getArgument(0)); return true; })
+                .when(response).resume(any(Response.class));
+
+        api.processTradeEvent("trade-id", new TradeEventDto(TradeEventTypeDto.SELLER_SENDS_PAYMENT_ACCOUNT, "Private account"), response);
+        assertThat(logStarted).isNotDone();
+        assertThat(resumed).isNotDone();
+        command.complete(null);
+        assertThat(logStarted.get(5, TimeUnit.SECONDS)).contains("Private account");
+        assertThat(resumed.get(5, TimeUnit.SECONDS).getStatus()).isEqualTo(204);
+        assertThat(delivery).isNotDone();
     }
 
     private TradeRestApi newTradeRestApi(BisqEasyOpenTradeChannelService openTradeChannelService,

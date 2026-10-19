@@ -22,7 +22,7 @@ import bisq.desktop.common.view.Model;
 import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.account.payment_method.BitcoinPaymentMethodSpec;
 import bisq.account.payment_method.fiat.FiatPaymentMethodSpec;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.user.profile.UserProfile;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -36,7 +36,7 @@ class TakeOfferReviewModel implements Model {
     @Setter
     private BisqEasyOffer bisqEasyOffer;
     @Setter
-    private BisqEasyTrade bisqEasyTrade;
+    private BisqEasyTradeReadModel bisqEasyTrade;
     @Setter
     private UserProfile peersUserProfile;
     @Setter

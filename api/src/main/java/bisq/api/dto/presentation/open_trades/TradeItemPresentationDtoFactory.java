@@ -26,7 +26,7 @@ import bisq.api.dto.user.reputation.ReputationScoreDto;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.presentation.formatters.DateFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeFormatter;
 import bisq.user.profile.UserProfile;
 import bisq.user.profile.UserProfileService;
@@ -36,7 +36,7 @@ import bisq.user.reputation.ReputationService;
 import java.util.Optional;
 
 public class TradeItemPresentationDtoFactory {
-    public static TradeItemPresentationDto create(BisqEasyTrade trade,
+    public static TradeItemPresentationDto create(BisqEasyTradeReadModel trade,
                                                   BisqEasyOpenTradeChannel channel,
                                                   UserProfileService userProfileService,
                                                   ReputationService reputationService) {

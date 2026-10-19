@@ -25,7 +25,7 @@ import bisq.common.monetary.Monetary;
 import bisq.desktop.common.view.Model;
 import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.offer.price.spec.PriceSpec;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -44,7 +44,7 @@ class TradeWizardReviewModel implements Model {
     @Setter
     private BisqEasyOffer bisqEasyOffer;
     @Setter
-    private BisqEasyTrade bisqEasyTrade;
+    private BisqEasyTradeReadModel bisqEasyTrade;
     @Setter
     private BisqEasyOfferbookChannel selectedChannel;
     @Setter

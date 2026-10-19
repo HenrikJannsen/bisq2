@@ -27,7 +27,7 @@ import lombok.ToString;
 
 import java.util.Optional;
 
-// Collection of all observable fields of BisqEasyTrade. Only the field which was
+// Collection of all observable fields of BisqEasyTradeReadModel. Only the field which was
 // updated will be set, the rest stays an empty optional which will result in an
 // empty json entry thus not causing overhead.
 @Getter

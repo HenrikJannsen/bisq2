@@ -17,7 +17,6 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannelService;
 import bisq.common.observable.collection.ObservableSet;
@@ -84,7 +83,7 @@ class BisqEasyTradeServiceChatChannelBindingTest {
         when(channelService.findChannelByTradeId(anyString())).thenAnswer(invocation -> channels.stream()
                 .filter(channel -> channel.getTradeId().equals(invocation.getArgument(0)))
                 .findAny());
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
 
         makerIdentity = identity("maker");
         makerNetworkId = makerIdentity.getNetworkId();
@@ -95,7 +94,7 @@ class BisqEasyTradeServiceChatChannelBindingTest {
 
     @AfterEach
     void tearDown() {
-        service.shutdown();
+        service.shutdown().join();
     }
 
     private BisqEasyOpenTradeChannel channelWith(BisqEasyOffer channelOffer) {
@@ -107,8 +106,9 @@ class BisqEasyTradeServiceChatChannelBindingTest {
         channels.add(channelWith(offer("offer-id", makerNetworkId, QUOTE_AMOUNT * 2)));
         service.getPersistableStore().addTrade(trade);
 
-        service.initialize();
+        service.initialize().join();
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.FAILED, trade.getState());
         assertEquals(TradeProtocolFailure.CHANNEL_DATA_MISMATCH, trade.getTradeProtocolFailure());
     }
@@ -118,8 +118,9 @@ class BisqEasyTradeServiceChatChannelBindingTest {
         channels.add(channelWith(BisqEasyOffer.fromProto(offer.toProto(false))));
         service.getPersistableStore().addTrade(trade);
 
-        service.initialize();
+        service.initialize().join();
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.INIT, trade.getState());
     }
 
@@ -129,28 +130,31 @@ class BisqEasyTradeServiceChatChannelBindingTest {
         channels.add(channel(completedTrade, offer("offer-id", makerNetworkId, QUOTE_AMOUNT * 2), userProfile(makerNetworkId), Optional.empty()));
         service.getPersistableStore().addTrade(completedTrade);
 
-        service.initialize();
+        service.initialize().join();
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.BTC_CONFIRMED, completedTrade.getState());
     }
 
     @Test
     void mismatchingChannelAppearingForStoredTradeFailsTrade() {
         service.getPersistableStore().addTrade(trade);
-        service.initialize();
+        service.initialize().join();
 
         channels.add(channelWith(offer("offer-id", makerNetworkId, QUOTE_AMOUNT * 2)));
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.FAILED, trade.getState());
     }
 
     @Test
     void matchingChannelAppearingForStoredTradeIsAccepted() {
         service.getPersistableStore().addTrade(trade);
-        service.initialize();
+        service.initialize().join();
 
         channels.add(channelWith(offer));
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.INIT, trade.getState());
     }
 
@@ -158,10 +162,11 @@ class BisqEasyTradeServiceChatChannelBindingTest {
     void makerChannelUnderTheTradeIdentityAppearingForStoredMakerTradeIsAccepted() {
         BisqEasyTrade makerTrade = sellerAsMakerTrade(trade.getContract(), makerIdentity);
         service.getPersistableStore().addTrade(makerTrade);
-        service.initialize();
+        service.initialize().join();
 
         channels.add(channel(makerTrade, offer, userProfile(takerIdentity.getNetworkId()), Optional.empty()));
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.INIT, makerTrade.getState());
     }
 
@@ -169,7 +174,7 @@ class BisqEasyTradeServiceChatChannelBindingTest {
     void makerChannelUnderAnotherLocalIdentityAppearingForStoredMakerTradeFailsTrade() {
         BisqEasyTrade makerTrade = sellerAsMakerTrade(trade.getContract(), makerIdentity);
         service.getPersistableStore().addTrade(makerTrade);
-        service.initialize();
+        service.initialize().join();
 
         // The taker addressed its first chat message to another identity of the maker.
         channels.add(channel(makerTrade,
@@ -178,6 +183,7 @@ class BisqEasyTradeServiceChatChannelBindingTest {
                 userProfile(takerIdentity.getNetworkId()),
                 Optional.empty()));
 
+        service.flush().join();
         assertEquals(BisqEasyTradeState.FAILED, makerTrade.getState());
         assertEquals(TradeProtocolFailure.CHANNEL_DATA_MISMATCH, makerTrade.getTradeProtocolFailure());
     }
@@ -185,7 +191,7 @@ class BisqEasyTradeServiceChatChannelBindingTest {
     @Test
     void mismatchingChannelExistingWhenMakerTradeIsCreatedFailsTrade() {
         makerAcceptsTakeOfferRequests(serviceProvider, makerIdentity, offer);
-        service.initialize();
+        service.initialize().join();
         BisqEasyContract contract = trade.getContract();
         // The taker's first chat message arrived before the take offer request and created the maker's channel.
         channels.add(channel(sellerAsMakerTrade(contract, makerIdentity),
@@ -195,7 +201,8 @@ class BisqEasyTradeServiceChatChannelBindingTest {
 
         service.onMessage(takeOfferRequest(trade.getId(), takerIdentity, contract));
 
-        BisqEasyTrade makerTrade = service.findTrade(trade.getId()).orElseThrow();
+        service.flush().join();
+        BisqEasyTradeReadModel makerTrade = service.findTrade(trade.getId()).orElseThrow();
         assertEquals(BisqEasyTradeState.FAILED, makerTrade.getState());
         assertEquals(TradeProtocolFailure.CHANNEL_DATA_MISMATCH, makerTrade.getTradeProtocolFailure());
     }
@@ -206,8 +213,9 @@ class BisqEasyTradeServiceChatChannelBindingTest {
     void chatChannelIsCreatedOnlyForATradeWithThatPeerAndOurUserProfileOfTheTrade() {
         BisqEasyOpenTradeChannelService channelService = serviceProvider.getChatService().getBisqEasyOpenTradeChannelService();
         service.getPersistableStore().addTrade(trade);
-        service.initialize();
+        service.initialize().join();
 
+        service.flush().join();
         ArgumentCaptor<BisqEasyOpenTradeChannelService.TradeWithPeerPredicate> isTradeWithPeer = ArgumentCaptor.captor();
         verify(channelService).setIsTradeWithPeer(isTradeWithPeer.capture());
         String me = takerIdentity.getNetworkId().getId();
@@ -223,17 +231,25 @@ class BisqEasyTradeServiceChatChannelBindingTest {
     void pendingChatMessagesAreProcessedWhenMakerTradeIsCreated() {
         BisqEasyOpenTradeChannelService channelService = serviceProvider.getChatService().getBisqEasyOpenTradeChannelService();
         makerAcceptsTakeOfferRequests(serviceProvider, makerIdentity, offer);
-        service.initialize();
+        service.initialize().join();
         AtomicBoolean tradeStoredWhenProcessing = new AtomicBoolean();
+        AtomicBoolean peerBindingReadyWhenProcessing = new AtomicBoolean();
+        ArgumentCaptor<BisqEasyOpenTradeChannelService.TradeWithPeerPredicate> isTradeWithPeer = ArgumentCaptor.captor();
+        verify(channelService).setIsTradeWithPeer(isTradeWithPeer.capture());
         doAnswer(invocation -> {
-            tradeStoredWhenProcessing.set(service.findTrade(invocation.getArgument(0)).isPresent());
+            tradeStoredWhenProcessing.set(service.getPersistableStore().findTrade(invocation.getArgument(0)).isPresent());
+            peerBindingReadyWhenProcessing.set(isTradeWithPeer.getValue().test(invocation.getArgument(0),
+                    takerIdentity.getNetworkId().getId(), makerNetworkId.getId()));
             return null;
         }).when(channelService).processPendingMessages(anyString());
 
         service.onMessage(takeOfferRequest(trade.getId(), takerIdentity, trade.getContract()));
 
+        service.flush().join();
         verify(channelService).processPendingMessages(trade.getId());
         assertTrue(tradeStoredWhenProcessing.get());
+        assertTrue(peerBindingReadyWhenProcessing.get());
+        assertTrue(service.findTrade(trade.getId()).isPresent());
     }
 
 }

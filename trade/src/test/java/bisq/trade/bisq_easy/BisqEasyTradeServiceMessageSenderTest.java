@@ -17,13 +17,11 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.common.network.Address;
 import bisq.common.network.AddressByTransportTypeMap;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.identity.Identity;
 import bisq.network.identity.NetworkId;
-import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.security.keys.KeyGeneration;
 import bisq.security.keys.PubKey;
 import bisq.trade.ServiceProvider;
@@ -49,7 +47,8 @@ import static org.mockito.Mockito.when;
  * message before the protocol handles it.
  */
 class BisqEasyTradeServiceMessageSenderTest {
-    private final NetworkId me = networkId("me", 1001);
+    private final Identity myIdentity = BisqEasyTradeTestData.identity("me");
+    private final NetworkId me = myIdentity.getNetworkId();
     private final NetworkId peer = networkId("peer", 1002);
     private final NetworkId thirdParty = networkId("third-party", 1003);
 
@@ -58,13 +57,12 @@ class BisqEasyTradeServiceMessageSenderTest {
 
     @BeforeEach
     void setUp() {
-        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(mock(ServiceProvider.class, RETURNS_DEEP_STUBS));
         // I am the taker and the buyer. The peer is the maker.
-        BisqEasyContract contract = mock(BisqEasyContract.class);
-        when(contract.getTakeOfferDate()).thenReturn(0L);
-        BisqEasyOffer offer = mock(BisqEasyOffer.class);
-        when(offer.getId()).thenReturn("offerId");
-        trade = new BisqEasyTrade(contract, true, true, mock(Identity.class), offer, me, peer);
+        BisqEasyContract contract = BisqEasyTradeTestData.contract(
+                BisqEasyTradeTestData.offer("offerId", peer, BisqEasyTradeTestData.QUOTE_AMOUNT), me,
+                java.util.Optional.empty());
+        trade = BisqEasyTradeTestData.buyerAsTakerTrade(contract, myIdentity);
     }
 
     @AfterEach
@@ -78,6 +76,7 @@ class BisqEasyTradeServiceMessageSenderTest {
 
         assertThatCode(() -> service.onMessage(errorReport(thirdParty))).doesNotThrowAnyException();
 
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
         assertThat(trade.getEventQueue()).isEmpty();
     }
@@ -88,6 +87,7 @@ class BisqEasyTradeServiceMessageSenderTest {
 
         service.onMessage(errorReport(peer));
 
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
     }
 
@@ -99,6 +99,7 @@ class BisqEasyTradeServiceMessageSenderTest {
 
         service.onMessage(errorReport(withOtherAddress(peer, 2002)));
 
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
     }
 
@@ -111,6 +112,7 @@ class BisqEasyTradeServiceMessageSenderTest {
         assertThatCode(() -> service.onMessage(errorReport(peer, networkId("my-other-identity", 1004))))
                 .doesNotThrowAnyException();
 
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
         assertThat(trade.getEventQueue()).isEmpty();
     }
@@ -127,14 +129,16 @@ class BisqEasyTradeServiceMessageSenderTest {
 
         assertThatCode(() -> service.onMessage(peerMessage)).doesNotThrowAnyException();
 
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
         assertThat(trade.getEventQueue()).containsExactly(peerMessage);
     }
 
     private void startServiceWithTrade() {
+        service.flush().join();
         service.getPersistableStore().addTrade(trade);
         service.initialize().join();
-        assertThat(service.findProtocol(trade.getId())).isPresent();
+        assertThat(service.findTrade(trade.getId())).isPresent();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
     }
 

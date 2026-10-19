@@ -21,7 +21,6 @@ import bisq.account.payment_method.BitcoinPaymentRail;
 import bisq.chat.ChatService;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannelService;
-import bisq.chat.priv.LeavePrivateChatManager;
 import bisq.common.observable.Observable;
 import bisq.common.observable.Pin;
 import bisq.common.observable.map.HashMapObserver;
@@ -32,7 +31,8 @@ import bisq.desktop.common.observable.FxBindings;
 import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.common.view.Controller;
 import bisq.desktop.common.view.Navigation;
-import bisq.desktop.common.utils.TradeExceptionHandler;
+import bisq.desktop.common.utils.AsyncTradeAction;
+import bisq.bisq_easy.BisqEasyTradeActionService;
 import bisq.desktop.components.overlay.Popup;
 import bisq.desktop.main.content.bisq_easy.TradesUtils;
 import bisq.desktop.main.content.bisq_easy.open_trades.trade_details.TradeDetailsController;
@@ -59,7 +59,7 @@ import bisq.network.p2p.services.confidential.resend.ResendMessageService;
 import bisq.settings.DontShowAgainService;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequest;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.exceptions.TradeProtocolFailure;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
@@ -71,6 +71,8 @@ import org.fxmisc.easybind.Subscription;
 
 import javax.annotation.Nullable;
 import java.util.Optional;
+import java.util.function.BiConsumer;
+import javafx.beans.property.ReadOnlyBooleanProperty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -88,19 +90,24 @@ public class TradeStateController implements Controller {
     private final BisqEasyMediationRequestService bisqEasyMediationRequestService;
     private final BannedUserService bannedUserService;
     private final DontShowAgainService dontShowAgainService;
-    private final LeavePrivateChatManager leavePrivateChatManager;
     private final Optional<ResendMessageService> resendMessageService;
     private Pin bisqEasyTradeStatePin, errorMessagePin, peersErrorMessagePin, isInMediationPin,
             requestMediationDeliveryStatusPin, messageDeliveryStatusByMessageIdPin;
     private Subscription channelPin;
+    private final AsyncTradeAction tradeAction = new AsyncTradeAction();
+    private final BisqEasyTradeActionService tradeActionService;
+    private final BiConsumer<BisqEasyTradeReadModel, BisqEasyOpenTradeChannel> archiveTradeHandler;
 
-    public TradeStateController(ServiceProvider serviceProvider) {
+    public TradeStateController(ServiceProvider serviceProvider,
+                                BiConsumer<BisqEasyTradeReadModel, BisqEasyOpenTradeChannel> archiveTradeHandler,
+                                ReadOnlyBooleanProperty archivePending) {
         this.serviceProvider = serviceProvider;
+        this.archiveTradeHandler = archiveTradeHandler;
         networkService = serviceProvider.getNetworkService();
         bisqEasyTradeService = serviceProvider.getTradeService().getBisqEasyTradeService();
+        tradeActionService = serviceProvider.getBisqEasyService().getBisqEasyTradeActionService();
         ChatService chatService = serviceProvider.getChatService();
         channelService = chatService.getBisqEasyOpenTradeChannelService();
-        leavePrivateChatManager = chatService.getLeavePrivateChatManager();
         bisqEasyMediationRequestService = serviceProvider.getSupportService().getBisqEasyMediationRequestService();
         bannedUserService = serviceProvider.getUserService().getBannedUserService();
         dontShowAgainService = serviceProvider.getDontShowAgainService();
@@ -109,17 +116,22 @@ public class TradeStateController implements Controller {
         tradePhaseBox = new TradePhaseBox(serviceProvider);
         tradeDataHeader = new TradeDataHeader(serviceProvider, Res.get("bisqEasy.tradeState.header.peer").toUpperCase());
         model = new TradeStateModel();
+        model.getActionPending().bind(tradeAction.pendingProperty().or(archivePending));
         view = new TradeStateView(model, this,
                 tradePhaseBox.getView().getRoot(),
                 tradeDataHeader.getRoot());
     }
 
     public void setSelectedChannel(BisqEasyOpenTradeChannel channel) {
+        if (model.getChannel().get() != channel) {
+            tradeAction.invalidate();
+        }
         model.getChannel().set(channel);
     }
 
     @Override
     public void onActivate() {
+        tradeAction.activate();
         channelPin = EasyBind.subscribe(model.getChannel(), channel -> {
             tradeDataHeader.setSelectedChannel(channel);
             tradePhaseBox.setSelectedChannel(channel);
@@ -131,7 +143,7 @@ public class TradeStateController implements Controller {
                 return;
             }
 
-            Optional<BisqEasyTrade> optionalBisqEasyTrade = bisqEasyTradeService.findTrade(channel.getTradeId());
+            Optional<BisqEasyTradeReadModel> optionalBisqEasyTrade = bisqEasyTradeService.findTrade(channel.getTradeId());
             if (optionalBisqEasyTrade.isEmpty()) {
                 model.resetAll();
                 return;
@@ -142,7 +154,7 @@ public class TradeStateController implements Controller {
 
             isInMediationPin = FxBindings.bind(model.getIsInMediation()).to(channel.isInMediationObservable());
 
-            BisqEasyTrade trade = optionalBisqEasyTrade.get();
+            BisqEasyTradeReadModel trade = optionalBisqEasyTrade.get();
             model.getBisqEasyTrade().set(trade);
 
             tradePhaseBox.setBisqEasyTrade(trade);
@@ -220,6 +232,7 @@ public class TradeStateController implements Controller {
 
     @Override
     public void onDeactivate() {
+        tradeAction.deactivate();
         channelPin.unsubscribe();
         removeChannelRelatedBindings();
         if (requestMediationDeliveryStatusPin != null) {
@@ -230,7 +243,7 @@ public class TradeStateController implements Controller {
     }
 
     void onInterruptTrade() {
-        BisqEasyTrade trade = model.getBisqEasyTrade().get();
+        BisqEasyTradeReadModel trade = model.getBisqEasyTrade().get();
         String message = switch (model.getTradeCloseType()) {
             case REJECT -> Res.get("bisqEasy.openTrades.rejectTrade.warning");
             case CANCEL -> {
@@ -252,35 +265,31 @@ public class TradeStateController implements Controller {
 
     void onShowTradeDetails() {
         BisqEasyOpenTradeChannel channel = model.getChannel().get();
-        Optional<BisqEasyTrade> optionalBisqEasyTrade = bisqEasyTradeService.findTrade(channel.getTradeId());
+        Optional<BisqEasyTradeReadModel> optionalBisqEasyTrade = bisqEasyTradeService.findTrade(channel.getTradeId());
         if (optionalBisqEasyTrade.isEmpty()) {
             model.resetAll();
             return;
         }
 
-        BisqEasyTrade bisqEasyTrade = optionalBisqEasyTrade.get();
+        BisqEasyTradeReadModel bisqEasyTrade = optionalBisqEasyTrade.get();
         Navigation.navigateTo(NavigationTarget.BISQ_EASY_TRADE_DETAILS,
                 new TradeDetailsController.InitData(bisqEasyTrade, channel.getMyUserIdentity().getUserProfile(), channel.getPeer(),
                         bisqEasyTrade.getContract().getMediator()));
     }
 
     private void doInterruptTrade() {
-        BisqEasyTrade trade = model.getBisqEasyTrade().get();
+        BisqEasyTradeReadModel trade = model.getBisqEasyTrade().get();
         String encoded;
         BisqEasyOpenTradeChannel channel = model.getChannel().get();
         String userName = channel.getMyUserIdentity().getUserName();
         switch (model.getTradeCloseType()) {
             case REJECT:
                 encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
-                if (TradeExceptionHandler.run(() -> bisqEasyTradeService.rejectTrade(trade))) {
-                    channelService.sendTradeLogMessage(encoded, channel);
-                }
+                tradeAction.run(() -> tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.rejectTrade(trade), channel, encoded));
                 break;
             case CANCEL:
                 encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.cancelled", userName);
-                if (TradeExceptionHandler.run(() -> bisqEasyTradeService.cancelTrade(trade))) {
-                    channelService.sendTradeLogMessage(encoded, channel);
-                }
+                tradeAction.run(() -> tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.cancelTrade(trade), channel, encoded));
                 break;
             case COMPLETED:
             default:
@@ -288,32 +297,23 @@ public class TradeStateController implements Controller {
     }
 
     void onArchiveTrade() {
+        onArchiveTrade(model.getBisqEasyTrade().get(), model.getChannel().get());
+    }
+
+    private void onArchiveTrade(BisqEasyTradeReadModel trade, BisqEasyOpenTradeChannel channel) {
         String key = "archiveTradeInfo";
         if (dontShowAgainService.showAgain(key)) {
             new Popup()
                     .headline(Res.get("popup.headline.information"))
                     .backgroundInfo(Res.get("bisqEasy.openTrades.closeTrade.info"))
                     .actionButtonText(Res.get("bisqEasy.openTrades.closeTrade.info.actionButton"))
-                    .onAction(this::doArchiveTrade)
+                    .onAction(() -> archiveTradeHandler.accept(trade, channel))
                     .closeButtonText(Res.get("action.cancel"))
                     .dontShowAgainId(key)
                     .show();
         } else {
-            doArchiveTrade();
+            archiveTradeHandler.accept(trade, channel);
         }
-    }
-
-    private void doArchiveTrade() {
-        // We need to pin the chatChannel to close as the one in the model would get updated after
-        // bisqEasyTradeService.removeTrade, and then we would close the wrong channel.
-        BisqEasyOpenTradeChannel chatChannel = model.getChannel().get();
-        bisqEasyTradeService.closeTrade(model.getBisqEasyTrade().get(), chatChannel.getMyUserIdentity().getUserProfile(), chatChannel.getPeer());
-        leavePrivateChatManager.leaveChannel(chatChannel);
-        goToTradeHistory();
-    }
-
-    private void goToTradeHistory() {
-        Navigation.navigateTo(NavigationTarget.BISQ_EASY_HISTORY);
     }
 
     void onExportTrade() {
@@ -327,7 +327,7 @@ public class TradeStateController implements Controller {
     }
 
     public void onResendMediationRequest() {
-        BisqEasyTrade bisqEasyTrade = model.getBisqEasyTrade().get();
+        BisqEasyTradeReadModel bisqEasyTrade = model.getBisqEasyTrade().get();
         if (bisqEasyTrade != null) {
             String mediationRequestId = BisqEasyMediationRequest.createMessageId(bisqEasyTrade.getId());
             resendMessageService.ifPresent(service -> service.manuallyResendMessage(mediationRequestId));
@@ -339,7 +339,7 @@ public class TradeStateController implements Controller {
     }
 
     private void handleNewMessageDeliveryStatus(String messageId, Observable<MessageDeliveryStatus> observableStatus) {
-        BisqEasyTrade bisqEasyTrade = model.getBisqEasyTrade().get();
+        BisqEasyTradeReadModel bisqEasyTrade = model.getBisqEasyTrade().get();
         if (bisqEasyTrade == null) {
             return;
         }
@@ -371,7 +371,7 @@ public class TradeStateController implements Controller {
             return;
         }
 
-        BisqEasyTrade trade = checkNotNull(model.getBisqEasyTrade().get());
+        BisqEasyTradeReadModel trade = checkNotNull(model.getBisqEasyTrade().get());
         BisqEasyOpenTradeChannel channel = checkNotNull(model.getChannel().get());
         boolean isSeller = trade.isSeller();
 
@@ -461,9 +461,9 @@ public class TradeStateController implements Controller {
                 model.getInterruptTradeButtonVisible().set(false);
                 model.getIsTradeCompleted().set(true);
                 if (isSeller) {
-                    model.getStateInfoVBox().set(new SellerState4(serviceProvider, trade, channel).getView().getRoot());
+                    model.getStateInfoVBox().set(new SellerState4(serviceProvider, trade, channel, () -> onArchiveTrade(trade, channel)).getView().getRoot());
                 } else {
-                    model.getStateInfoVBox().set(new BuyerState4(serviceProvider, trade, channel).getView().getRoot());
+                    model.getStateInfoVBox().set(new BuyerState4(serviceProvider, trade, channel, () -> onArchiveTrade(trade, channel)).getView().getRoot());
                 }
                 break;
 
@@ -509,7 +509,7 @@ public class TradeStateController implements Controller {
         }
     }
 
-    private void applyTradeInterruptedInfo(BisqEasyTrade trade, boolean isCancelled) {
+    private void applyTradeInterruptedInfo(BisqEasyTradeReadModel trade, boolean isCancelled) {
         boolean isMaker = trade.isMaker();
         boolean makerInterruptedTrade = trade.getInterruptTradeInitiator().get() == Role.MAKER;
         boolean selfInitiated = (makerInterruptedTrade && isMaker) ||

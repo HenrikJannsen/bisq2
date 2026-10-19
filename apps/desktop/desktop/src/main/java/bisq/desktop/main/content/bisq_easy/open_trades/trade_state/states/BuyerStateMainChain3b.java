@@ -19,14 +19,14 @@ package bisq.desktop.main.content.bisq_easy.open_trades.trade_state.states;
 
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.desktop.ServiceProvider;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class BuyerStateMainChain3b extends StateMainChain3b<BuyerStateMainChain3b.Controller> {
     public BuyerStateMainChain3b(ServiceProvider serviceProvider,
-                                 BisqEasyTrade bisqEasyTrade,
+                                 BisqEasyTradeReadModel bisqEasyTrade,
                                  BisqEasyOpenTradeChannel channel) {
         super(serviceProvider, bisqEasyTrade, channel);
     }
@@ -37,20 +37,20 @@ public class BuyerStateMainChain3b extends StateMainChain3b<BuyerStateMainChain3
 
     @Override
     protected Controller getController(ServiceProvider serviceProvider,
-                                       BisqEasyTrade bisqEasyTrade,
+                                       BisqEasyTradeReadModel bisqEasyTrade,
                                        BisqEasyOpenTradeChannel channel) {
         return new Controller(serviceProvider, bisqEasyTrade, channel);
     }
 
     protected static class Controller extends StateMainChain3b.Controller<Model, View> {
         protected Controller(ServiceProvider serviceProvider,
-                             BisqEasyTrade bisqEasyTrade,
+                             BisqEasyTradeReadModel bisqEasyTrade,
                              BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -62,7 +62,7 @@ public class BuyerStateMainChain3b extends StateMainChain3b<BuyerStateMainChain3
 
     @Getter
     protected static class Model extends StateMainChain3b.Model {
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

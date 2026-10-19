@@ -24,7 +24,7 @@ import bisq.presentation.formatters.AmountFormatter;
 import bisq.presentation.formatters.PriceFormatter;
 
 public class BisqEasyTradeFormatter {
-    public static String formatBaseSideAmount(BisqEasyTrade trade) {
+    public static String formatBaseSideAmount(BisqEasyTradeReadModel trade) {
         return formatBaseSideAmount(trade.getContract());
     }
 
@@ -32,7 +32,7 @@ public class BisqEasyTradeFormatter {
         return AmountFormatter.formatBaseAmount(contract.getBaseSideMonetary());
     }
 
-    public static String formatQuoteSideAmount(BisqEasyTrade trade) {
+    public static String formatQuoteSideAmount(BisqEasyTradeReadModel trade) {
         return AmountFormatter.formatQuoteAmount(trade.getQuoteSideMonetary());
     }
 
@@ -40,7 +40,7 @@ public class BisqEasyTradeFormatter {
         return AmountFormatter.formatQuoteAmount(contract.getQuoteSideMonetary());
     }
 
-    public static String formatQuoteSideAmountWithCode(BisqEasyTrade trade) {
+    public static String formatQuoteSideAmountWithCode(BisqEasyTradeReadModel trade) {
         return formatQuoteSideAmountWithCode(trade.getContract());
     }
 
@@ -48,7 +48,7 @@ public class BisqEasyTradeFormatter {
         return AmountFormatter.formatQuoteAmountWithCode(contract.getQuoteSideMonetary());
     }
 
-    public static String formatPriceWithCode(BisqEasyTrade trade) {
+    public static String formatPriceWithCode(BisqEasyTradeReadModel trade) {
         return formatPriceWithCode(trade.getContract());
     }
 
@@ -56,7 +56,7 @@ public class BisqEasyTradeFormatter {
         return PriceFormatter.formatWithCode(contract.getPriceQuote());
     }
 
-    public static String getDirectionalTitle(BisqEasyTrade trade) {
+    public static String getDirectionalTitle(BisqEasyTradeReadModel trade) {
         Direction displayDirection = trade.getDisplayOfferDirection();
         return getDirectionalTitle(displayDirection);
     }
@@ -67,7 +67,7 @@ public class BisqEasyTradeFormatter {
                 : Res.get("bisqEasy.openTrades.table.direction.seller");
     }
 
-    public static String getMakerTakerRole(BisqEasyTrade trade) {
+    public static String getMakerTakerRole(BisqEasyTradeReadModel trade) {
         return switch (trade.getTradeRole()) {
             case BUYER_AS_TAKER, SELLER_AS_TAKER -> Res.get("bisqEasy.openTrades.table.makerTakerRole.taker");
             case BUYER_AS_MAKER, SELLER_AS_MAKER -> Res.get("bisqEasy.openTrades.table.makerTakerRole.maker");

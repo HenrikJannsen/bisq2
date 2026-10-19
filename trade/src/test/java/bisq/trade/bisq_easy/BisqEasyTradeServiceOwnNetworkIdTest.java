@@ -17,7 +17,6 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.common.network.Address;
 import bisq.common.network.AddressByTransportTypeMap;
 import bisq.contract.bisq_easy.BisqEasyContract;
@@ -61,7 +60,7 @@ class BisqEasyTradeServiceOwnNetworkIdTest {
     @BeforeEach
     void setUp() {
         serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
     }
 
     @AfterEach
@@ -89,7 +88,7 @@ class BisqEasyTradeServiceOwnNetworkIdTest {
         service.getPersistableStore().addTrade(trade);
         service.initialize().join();
 
-        service.rejectTrade(trade);
+        service.rejectTrade(service.findTrade(trade.getId()).orElseThrow()).join();
 
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.REJECTED);
         NetworkService networkService = serviceProvider.getNetworkService();

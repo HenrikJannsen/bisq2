@@ -36,6 +36,9 @@ import bisq.desktop.main.content.components.UserProfileIcon;
 import bisq.i18n.Res;
 import bisq.user.profile.UserProfile;
 import javafx.beans.InvalidationListener;
+import javafx.event.EventHandler;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
@@ -73,6 +76,8 @@ public final class BisqEasyOpenTradesView extends ChatView<BisqEasyOpenTradesVie
             selectedModelItemPin, chatWindowPin, isAnyTradeInMediationPin;
     private BisqTableColumn<OpenTradeListItem> mediatorColumn;
     private final InvalidationListener listItemListener;
+    private final EventHandler<MouseEvent> tradeSelectionMouseHandler = event -> getController().onTradeSelectionInteraction();
+    private final EventHandler<KeyEvent> tradeSelectionKeyHandler = event -> getController().onTradeSelectionInteraction();
 
     public BisqEasyOpenTradesView(BisqEasyOpenTradesModel model,
                                   BisqEasyOpenTradesController controller,
@@ -136,6 +141,8 @@ public final class BisqEasyOpenTradesView extends ChatView<BisqEasyOpenTradesVie
     @Override
     protected void onViewAttached() {
         super.onViewAttached();
+        tableView.addEventFilter(MouseEvent.MOUSE_PRESSED, tradeSelectionMouseHandler);
+        tableView.addEventFilter(KeyEvent.KEY_PRESSED, tradeSelectionKeyHandler);
 
         tableView.getItems().addListener(listItemListener);
 
@@ -204,6 +211,8 @@ public final class BisqEasyOpenTradesView extends ChatView<BisqEasyOpenTradesVie
     @Override
     protected void onViewDetached() {
         super.onViewDetached();
+        tableView.removeEventFilter(MouseEvent.MOUSE_PRESSED, tradeSelectionMouseHandler);
+        tableView.removeEventFilter(KeyEvent.KEY_PRESSED, tradeSelectionKeyHandler);
 
         // TODO would be nice to keep it open or allow multiple windows... but for now keep it simple...
         getController().onCloseChatWindow();

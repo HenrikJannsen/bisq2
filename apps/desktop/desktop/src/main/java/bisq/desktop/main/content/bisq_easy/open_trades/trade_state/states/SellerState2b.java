@@ -21,7 +21,7 @@ import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.components.controls.WrappingText;
 import bisq.i18n.Res;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.layout.VBox;
@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SellerState2b extends BaseState {
     private final Controller controller;
 
-    public SellerState2b(ServiceProvider serviceProvider, BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+    public SellerState2b(ServiceProvider serviceProvider, BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
         controller = new Controller(serviceProvider, bisqEasyTrade, channel);
     }
 
@@ -41,12 +41,12 @@ public class SellerState2b extends BaseState {
     }
 
     private static class Controller extends BaseState.Controller<Model, View> {
-        private Controller(ServiceProvider serviceProvider, BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        private Controller(ServiceProvider serviceProvider, BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -74,7 +74,7 @@ public class SellerState2b extends BaseState {
 
     @Getter
     private static class Model extends BaseState.Model {
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

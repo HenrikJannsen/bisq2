@@ -25,7 +25,7 @@ import bisq.common.observable.collection.CollectionObserver;
 import bisq.common.observable.collection.ObservableArray;
 import bisq.trade.TradeService;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
-import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
+import bisq.trade.bisq_easy.BisqEasyClosedTradeReadModel;
 import bisq.user.UserService;
 import bisq.user.reputation.ReputationService;
 import lombok.Getter;
@@ -55,7 +55,7 @@ public class ClosedTradeItemsService implements Service {
     public CompletableFuture<Boolean> initialize() {
         closedTradesPin = bisqEasyTradeService.getClosedTrades().addObserver(new CollectionObserver<>() {
             @Override
-            public void onAdded(BisqEasyClosedTrade closedTrade) {
+            public void onAdded(BisqEasyClosedTradeReadModel closedTrade) {
                 if (findListItem(closedTrade.trade().getId()).isEmpty()) {
                     items.add(ClosedTradeListItemDtoFactory.create(closedTrade, reputationService));
                 }
@@ -63,7 +63,7 @@ public class ClosedTradeItemsService implements Service {
 
             @Override
             public void onRemoved(Object element) {
-                if (element instanceof BisqEasyClosedTrade closedTrade) {
+                if (element instanceof BisqEasyClosedTradeReadModel closedTrade) {
                     findListItem(closedTrade.trade().getId()).ifPresent(items::remove);
                 }
             }

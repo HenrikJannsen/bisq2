@@ -22,7 +22,6 @@ import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.Icons;
 import bisq.desktop.common.utils.ClipboardUtil;
-import bisq.desktop.common.utils.TradeExceptionHandler;
 import bisq.desktop.components.controls.MaterialTextArea;
 import bisq.desktop.components.controls.MaterialTextField;
 import bisq.desktop.components.controls.WrappingText;
@@ -30,7 +29,7 @@ import bisq.desktop.components.controls.validator.SettableErrorValidator;
 import bisq.desktop.components.overlay.Popup;
 import bisq.i18n.Res;
 import bisq.support.moderator.ModerationRequestService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.user.profile.UserProfile;
 import de.jensd.fx.fontawesome.AwesomeIcon;
 import javafx.beans.property.BooleanProperty;
@@ -48,7 +47,7 @@ public class BuyerState2a extends BaseState {
     private final Controller controller;
 
     public BuyerState2a(ServiceProvider serviceProvider,
-                        BisqEasyTrade bisqEasyTrade,
+                        BisqEasyTradeReadModel bisqEasyTrade,
                         BisqEasyOpenTradeChannel channel) {
         controller = new Controller(serviceProvider, bisqEasyTrade, channel);
     }
@@ -62,7 +61,7 @@ public class BuyerState2a extends BaseState {
         private final ModerationRequestService moderationRequestService;
 
         private Controller(ServiceProvider serviceProvider,
-                           BisqEasyTrade bisqEasyTrade,
+                           BisqEasyTradeReadModel bisqEasyTrade,
                            BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
 
@@ -71,7 +70,7 @@ public class BuyerState2a extends BaseState {
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -84,7 +83,7 @@ public class BuyerState2a extends BaseState {
         public void onActivate() {
             super.onActivate();
 
-            BisqEasyTrade trade = model.getTrade();
+            BisqEasyTradeReadModel trade = model.getTrade();
             String sellersAccountData = trade.getPaymentAccountData().orElse(null);
 
             if (bisqEasyService.isAccountDataBanned(sellersAccountData)) {
@@ -99,7 +98,7 @@ public class BuyerState2a extends BaseState {
                 moderationRequestService.reportUserProfile(peer, message);
 
                 // We reject the trade to avoid the banned user can continue
-                TradeExceptionHandler.run(() -> bisqEasyTradeService.cancelTrade(trade));
+                runTradeAction(() -> bisqEasyTradeService.cancelTrade(trade));
 
                 new Popup().warning(Res.get("bisqEasy.tradeState.info.buyer.phase2a.accountDataBanned.popup.warning")).show();
             } else {
@@ -124,7 +123,7 @@ public class BuyerState2a extends BaseState {
     private static class Model extends BaseState.Model {
         private final BooleanProperty confirmFiatSentButtonDisabled = new SimpleBooleanProperty();
         private final SettableErrorValidator accountDataBannedValidator = new SettableErrorValidator(Res.get("bisqEasy.tradeState.info.buyer.phase2a.accountDataBannedError"));
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

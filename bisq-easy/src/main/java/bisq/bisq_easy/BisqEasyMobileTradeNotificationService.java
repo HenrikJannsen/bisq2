@@ -22,7 +22,7 @@ import bisq.common.observable.Pin;
 import bisq.common.observable.collection.CollectionObserver;
 import bisq.i18n.Res;
 import bisq.notifications.NotificationService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.user.profile.UserProfile;
@@ -30,10 +30,12 @@ import bisq.user.profile.UserProfileService;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Emits mobile-push notifications for the trade-state transitions that the user actually
@@ -45,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code bisq-network/bisq-mobile#1450} — they fired 6–10+ times per active trade and
  * spammed users). That filter killed the noise AND the few signal events. This service
  * re-introduces the useful signal events on the mobile relay path, observing
- * {@link BisqEasyTrade#tradeStateObservable()} directly with a tight whitelist of states.
+ * {@link BisqEasyTradeReadModel#tradeStateObservable()} directly with a tight whitelist of states.
  * <p>
  * Dispatch is mobile-only (via {@link NotificationService#dispatchMobileOnlyNotification})
  * because the desktop already surfaces these events through the in-app trade chat's
@@ -88,26 +90,9 @@ public class BisqEasyMobileTradeNotificationService implements Service {
     private final UserProfileService userProfileService;
     private final NotificationService notificationService;
 
-    /** Per-trade state-observer Pins so we can unbind on trade removal / shutdown. */
-    private final Map<String, Pin> tradeStatePins = new ConcurrentHashMap<>();
-
-    /**
-     * Trade IDs whose state observer has fired at least once. {@code Observable#addObserver}
-     * fires synchronously with the current value when subscribed — we treat that first
-     * emission as "we just started watching" rather than a real transition, so existing
-     * trades don't re-notify on service startup. Subsequent emissions are real transitions.
-     */
-    private final Set<String> tradesWithInitializedState = ConcurrentHashMap.newKeySet();
-
-    /**
-     * Trades for which we've already emitted a "payment account info exchanged" push.
-     * Mirrors {@code OpenTradesNotificationService.notifiedPaymentInfo} on Android
-     * nodeApp.
-     */
-    private final Set<String> notifiedPaymentInfo = ConcurrentHashMap.newKeySet();
-
+    private final Object subscriptionLock = new Object();
     @Nullable
-    private Pin tradesPin;
+    private Subscription subscription;
 
     public BisqEasyMobileTradeNotificationService(BisqEasyTradeService bisqEasyTradeService,
                                                   UserProfileService userProfileService,
@@ -125,35 +110,61 @@ public class BisqEasyMobileTradeNotificationService implements Service {
     @Override
     public CompletableFuture<Boolean> initialize() {
         log.info("initialize");
-        tradesPin = bisqEasyTradeService.getTrades().addObserver(new CollectionObserver<BisqEasyTrade>() {
+        Subscription current;
+        synchronized (subscriptionLock) {
+            if (subscription != null) {
+                return CompletableFuture.completedFuture(true);
+            }
+            current = new Subscription();
+            subscription = current;
+        }
+        Pin pin = bisqEasyTradeService.getTrades().addObserver(new CollectionObserver<BisqEasyTradeReadModel>() {
             @Override
-            public void onAdded(BisqEasyTrade trade) {
-                subscribeToTrade(trade);
+            public void onAdded(BisqEasyTradeReadModel trade) {
+                subscribeToTrade(current, trade);
             }
 
             @Override
             public void onRemoved(Object element) {
-                if (element instanceof BisqEasyTrade trade) {
-                    unsubscribeFromTrade(trade);
+                if (element instanceof BisqEasyTradeReadModel trade) {
+                    unsubscribeFromTrade(current, trade);
                 }
             }
 
             @Override
             public void onCleared() {
-                clearAllState();
+                clearAllState(current);
             }
         });
+        boolean attach;
+        synchronized (subscriptionLock) {
+            attach = current.active;
+            if (attach) {
+                current.tradesPin = pin;
+            }
+        }
+        if (!attach) {
+            pin.unbind();
+        }
         return CompletableFuture.completedFuture(true);
     }
 
     @Override
     public CompletableFuture<Boolean> shutdown() {
         log.info("shutdown");
-        if (tradesPin != null) {
-            tradesPin.unbind();
-            tradesPin = null;
+        List<Pin> pins = new ArrayList<>();
+        synchronized (subscriptionLock) {
+            if (subscription != null) {
+                subscription.active = false;
+                if (subscription.tradesPin != null) {
+                    pins.add(subscription.tradesPin);
+                    subscription.tradesPin = null;
+                }
+                closeTradeSubscriptions(subscription, pins);
+                subscription = null;
+            }
         }
-        clearAllState();
+        pins.forEach(Pin::unbind);
         return CompletableFuture.completedFuture(true);
     }
 
@@ -162,46 +173,106 @@ public class BisqEasyMobileTradeNotificationService implements Service {
     // Per-trade subscription
     /* --------------------------------------------------------------------- */
 
-    private void subscribeToTrade(BisqEasyTrade trade) {
-        String tradeId = trade.getId();
-        Pin previous = tradeStatePins.remove(tradeId);
-        if (previous != null) {
-            previous.unbind();
+    private void subscribeToTrade(Subscription current, BisqEasyTradeReadModel trade) {
+        TradeSubscription registration = new TradeSubscription(trade);
+        List<Pin> previousPins = new ArrayList<>();
+        synchronized (subscriptionLock) {
+            if (!current.active) {
+                return;
+            }
+            TradeSubscription previous = current.trades.get(trade.getId());
+            if (previous != null) {
+                if (previous.trade == trade) {
+                    return;
+                }
+                closeTradeSubscription(previous, previousPins);
+            }
+            current.trades.put(trade.getId(), registration);
         }
-        Pin pin = trade.tradeStateObservable().addObserver(state -> onStateEmitted(trade, state));
-        tradeStatePins.put(tradeId, pin);
-    }
-
-    private void unsubscribeFromTrade(BisqEasyTrade trade) {
-        Pin pin = tradeStatePins.remove(trade.getId());
-        if (pin != null) {
+        previousPins.forEach(Pin::unbind);
+        Pin pin = trade.tradeStateObservable().addObserver(state -> onStateEmitted(registration, state));
+        boolean attach;
+        synchronized (subscriptionLock) {
+            attach = registration.active;
+            if (attach) {
+                registration.statePin = pin;
+            }
+        }
+        // addObserver may invoke callbacks before returning. Removal/shutdown can close the
+        // registration during that call, so its late Pin must never become an owned subscription.
+        if (!attach) {
             pin.unbind();
         }
-        tradesWithInitializedState.remove(trade.getId());
-        notifiedPaymentInfo.remove(trade.getId());
     }
 
-    private void clearAllState() {
-        tradeStatePins.values().forEach(Pin::unbind);
-        tradeStatePins.clear();
-        tradesWithInitializedState.clear();
-        notifiedPaymentInfo.clear();
+    private void unsubscribeFromTrade(Subscription current, BisqEasyTradeReadModel trade) {
+        List<Pin> pins = new ArrayList<>();
+        synchronized (subscriptionLock) {
+            TradeSubscription registration = current.trades.get(trade.getId());
+            if (registration != null && registration.trade == trade) {
+                current.trades.remove(trade.getId());
+                closeTradeSubscription(registration, pins);
+            }
+        }
+        pins.forEach(Pin::unbind);
     }
 
-    private void onStateEmitted(BisqEasyTrade trade, BisqEasyTradeState state) {
-        if (state == null) {
+    private void clearAllState(Subscription current) {
+        List<Pin> pins = new ArrayList<>();
+        synchronized (subscriptionLock) {
+            closeTradeSubscriptions(current, pins);
+        }
+        pins.forEach(Pin::unbind);
+    }
+
+    private void closeTradeSubscriptions(Subscription current, List<Pin> pins) {
+        current.trades.values().forEach(registration -> closeTradeSubscription(registration, pins));
+        current.trades.clear();
+    }
+
+    private void closeTradeSubscription(TradeSubscription registration, List<Pin> pins) {
+        registration.active = false;
+        if (registration.statePin != null) {
+            pins.add(registration.statePin);
+            registration.statePin = null;
+        }
+    }
+
+    private void onStateEmitted(TradeSubscription registration, BisqEasyTradeState state) {
+        if (state == null || !registration.active) {
             return;
         }
-        String tradeId = trade.getId();
-        boolean isFirstEmission = tradesWithInitializedState.add(tradeId);
-        if (isFirstEmission) {
+        String tradeId = registration.trade.getId();
+        if (registration.initialized.compareAndSet(false, true)) {
             log.debug("Skipping initial state observation for trade {} (state={})", tradeId, state);
             return;
         }
         try {
-            handleStateChange(trade, state);
+            handleStateChange(registration, state);
         } catch (Exception e) {
             log.error("Failed to handle mobile-push trade state change for trade {} state {}", tradeId, state, e);
+        }
+    }
+
+    private static final class Subscription {
+        private boolean active = true;
+        @Nullable
+        private Pin tradesPin;
+        private final Map<String, TradeSubscription> trades = new HashMap<>();
+    }
+
+    private static final class TradeSubscription {
+        private final BisqEasyTradeReadModel trade;
+        private volatile boolean active = true;
+        @Nullable
+        private Pin statePin;
+        // The initial observer emission is a snapshot, not a new transition. Both markers belong
+        // to this registration, so callbacks from a removed trade cannot affect its replacement.
+        private final AtomicBoolean initialized = new AtomicBoolean();
+        private final AtomicBoolean notifiedPaymentInfo = new AtomicBoolean();
+
+        private TradeSubscription(BisqEasyTradeReadModel trade) {
+            this.trade = trade;
         }
     }
 
@@ -210,7 +281,8 @@ public class BisqEasyMobileTradeNotificationService implements Service {
     // Whitelist + dispatch
     /* --------------------------------------------------------------------- */
 
-    private void handleStateChange(BisqEasyTrade trade, BisqEasyTradeState state) {
+    private void handleStateChange(TradeSubscription registration, BisqEasyTradeState state) {
+        BisqEasyTradeReadModel trade = registration.trade;
         // Maker protocols respond automatically to a received request. They never enter the
         // TAKER_SENT_TAKE_OFFER_REQUEST state, which belongs to the taker's local action.
         // A buyer maker who received the account data before the request enters a state which also
@@ -221,9 +293,9 @@ public class BisqEasyMobileTradeNotificationService implements Service {
         // transition does not push either.
         if (trade.isMaker() && isOfferTakenState(state)) {
             if (isPaymentInfoExchangedState(state)) {
-                notifiedPaymentInfo.add(trade.getId());
+                registration.notifiedPaymentInfo.set(true);
             }
-            dispatch(trade, "bisqEasy.mobileNotifications.offerTaken.title",
+            dispatch(registration, "bisqEasy.mobileNotifications.offerTaken.title",
                     "bisqEasy.mobileNotifications.offerTaken.message");
             return;
         }
@@ -246,12 +318,12 @@ public class BisqEasyMobileTradeNotificationService implements Service {
         // bisq-network/bisq-mobile#1464 once the public-chat noise that had
         // been masking the gap got correctly filtered out.
         if (isPaymentInfoExchangedState(state)) {
-            if (notifiedPaymentInfo.add(trade.getId())) {
+            if (registration.notifiedPaymentInfo.compareAndSet(false, true)) {
                 if (trade.isSeller()) {
-                    dispatch(trade, "bisqEasy.mobileNotifications.paymentInfoSent.title",
+                    dispatch(registration, "bisqEasy.mobileNotifications.paymentInfoSent.title",
                             "bisqEasy.mobileNotifications.paymentInfoSent.message");
                 } else {
-                    dispatch(trade, "bisqEasy.mobileNotifications.paymentInfoReceived.title",
+                    dispatch(registration, "bisqEasy.mobileNotifications.paymentInfoReceived.title",
                             "bisqEasy.mobileNotifications.paymentInfoReceived.message");
                 }
             }
@@ -281,7 +353,7 @@ public class BisqEasyMobileTradeNotificationService implements Service {
         switch (state) {
             case SELLER_RECEIVED_FIAT_SENT_CONFIRMATION -> {
                 if (trade.isSeller()) {
-                    dispatch(trade, "bisqEasy.mobileNotifications.youReceivedFiatConfirmation.title",
+                    dispatch(registration, "bisqEasy.mobileNotifications.youReceivedFiatConfirmation.title",
                             "bisqEasy.mobileNotifications.youReceivedFiatConfirmation.message");
                 }
             }
@@ -291,7 +363,7 @@ public class BisqEasyMobileTradeNotificationService implements Service {
                 // SELLER_CONFIRMED_FIAT_RECEIPT (the seller's own-action twin of this
                 // state) is intentionally absent — see suppressed list above.
                 if (trade.isBuyer()) {
-                    dispatch(trade, "bisqEasy.mobileNotifications.peerReceivedFiat.title",
+                    dispatch(registration, "bisqEasy.mobileNotifications.peerReceivedFiat.title",
                             "bisqEasy.mobileNotifications.peerReceivedFiat.message");
                 }
             }
@@ -301,7 +373,7 @@ public class BisqEasyMobileTradeNotificationService implements Service {
                 // SELLER_SENT_BTC_SENT_CONFIRMATION (seller's own-action twin) is
                 // intentionally suppressed — see list above.
                 if (trade.isBuyer()) {
-                    dispatch(trade, "bisqEasy.mobileNotifications.youReceivedBtc.title",
+                    dispatch(registration, "bisqEasy.mobileNotifications.youReceivedBtc.title",
                             "bisqEasy.mobileNotifications.youReceivedBtc.message");
                 }
             }
@@ -310,7 +382,7 @@ public class BisqEasyMobileTradeNotificationService implements Service {
                 if (state.isFinalState()) {
                     String terminalKey = terminalI18nKey(state);
                     if (terminalKey != null) {
-                        dispatchTerminal(trade, terminalKey);
+                        dispatchTerminal(registration, terminalKey);
                     }
                 }
                 // Other non-whitelist, non-terminal states are intentionally silent.
@@ -357,22 +429,30 @@ public class BisqEasyMobileTradeNotificationService implements Service {
         };
     }
 
-    private void dispatch(BisqEasyTrade trade, String titleKey, String messageKey) {
+    private void dispatch(TradeSubscription registration, String titleKey, String messageKey) {
+        BisqEasyTradeReadModel trade = registration.trade;
         String shortTradeId = shortTradeId(trade);
         String peerName = peerNameFor(trade);
         String title = Res.get(titleKey, shortTradeId);
         String message = Res.get(messageKey, peerName);
         String notificationId = notificationIdFor(trade);
+        if (!registration.active) {
+            return;
+        }
         notificationService.dispatchMobileOnlyNotification(
                 new MobileTradeNotification(notificationId, title, message, trade.getId()));
     }
 
-    private void dispatchTerminal(BisqEasyTrade trade, String terminalI18nKey) {
+    private void dispatchTerminal(TradeSubscription registration, String terminalI18nKey) {
+        BisqEasyTradeReadModel trade = registration.trade;
         String shortTradeId = shortTradeId(trade);
         String peerName = peerNameFor(trade);
         String terminalLabel = Res.get(terminalI18nKey);
         String title = Res.get("bisqEasy.mobileNotifications.tradeCompleted.title", shortTradeId);
         String message = Res.get("bisqEasy.mobileNotifications.tradeCompleted.message", peerName, terminalLabel);
+        if (!registration.active) {
+            return;
+        }
         notificationService.dispatchMobileOnlyNotification(
                 new MobileTradeNotification(notificationIdFor(trade), title, message, trade.getId()));
     }
@@ -408,12 +488,12 @@ public class BisqEasyMobileTradeNotificationService implements Service {
         };
     }
 
-    private static String shortTradeId(BisqEasyTrade trade) {
+    private static String shortTradeId(BisqEasyTradeReadModel trade) {
         String id = trade.getId();
         return id.substring(0, Math.min(8, id.length()));
     }
 
-    private String peerNameFor(BisqEasyTrade trade) {
+    private String peerNameFor(BisqEasyTradeReadModel trade) {
         return userProfileService.findUserProfile(trade.getPeer().getNetworkId().getId())
                 .map(UserProfile::getUserName)
                 .orElse("?");
@@ -424,7 +504,7 @@ public class BisqEasyMobileTradeNotificationService implements Service {
      * REPLACE the previous push on the device rather than stack up another row in the
      * notification tray (this matches Android nodeApp's {@code NotificationIds.getTradeStateUpdatedId(...)}).
      */
-    private static String notificationIdFor(BisqEasyTrade trade) {
+    private static String notificationIdFor(BisqEasyTradeReadModel trade) {
         return "bisq-easy-mobile-trade-" + shortTradeId(trade);
     }
 }

@@ -26,7 +26,7 @@ import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.Transitions;
 import bisq.desktop.testutil.JavaFxToolkitExtension;
 import bisq.settings.SettingsService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import javafx.scene.Scene;
 import javafx.scene.layout.Pane;
@@ -72,14 +72,15 @@ class TradeStateProgressTest {
         when(settingsService.getUseAnimations()).thenReturn(new Observable<>(false));
         Transitions.setSettingsService(settingsService);
 
-        BisqEasyTrade trade = trade(state);
+        BisqEasyTradeReadModel trade = trade(state);
         BisqEasyOpenTradeChannel channel = channel("trade", trade);
         runOnFxThread(() -> {
             // The controller and state components are real. Capturing the model avoids attaching unrelated
             // header and mediation controls while testing the production subscriptions on the JavaFX thread.
             try (MockedConstruction<TradeStateView> ignored = mockConstruction(TradeStateView.class,
                     (view, context) -> model = (TradeStateModel) context.arguments().getFirst())) {
-                controller = new TradeStateController(serviceProvider);
+                controller = new TradeStateController(serviceProvider, (tradeToArchive, channelToArchive) -> {},
+                        new javafx.beans.property.SimpleBooleanProperty());
             }
             controller.onActivate();
             controller.setSelectedChannel(channel);
@@ -124,7 +125,7 @@ class TradeStateProgressTest {
     void delayedStateOfPreviousTradeDoesNotChangeTheSelectedTrade() {
         Observable<BisqEasyTradeState> otherState = new Observable<>(
                 TAKER_RECEIVED_TAKE_OFFER_RESPONSE__SELLER_SENT_ACCOUNT_DATA__SELLER_DID_NOT_RECEIVED_BTC_ADDRESS);
-        BisqEasyTrade otherTrade = trade(otherState);
+        BisqEasyTradeReadModel otherTrade = trade(otherState);
         BisqEasyOpenTradeChannel otherChannel = channel("other-trade", otherTrade);
         AtomicReference<VBox> selectedScreen = new AtomicReference<>();
 
@@ -179,8 +180,8 @@ class TradeStateProgressTest {
         }
     }
 
-    private BisqEasyTrade trade(Observable<BisqEasyTradeState> tradeState) {
-        BisqEasyTrade trade = mock(BisqEasyTrade.class, RETURNS_DEEP_STUBS);
+    private BisqEasyTradeReadModel trade(Observable<BisqEasyTradeState> tradeState) {
+        BisqEasyTradeReadModel trade = mock(BisqEasyTradeReadModel.class, RETURNS_DEEP_STUBS);
         when(trade.tradeStateObservable()).thenReturn(tradeState);
         when(trade.getTradeState()).thenAnswer(invocation -> tradeState.get());
         when(trade.isSeller()).thenReturn(true);
@@ -189,7 +190,7 @@ class TradeStateProgressTest {
         return trade;
     }
 
-    private BisqEasyOpenTradeChannel channel(String tradeId, BisqEasyTrade trade) {
+    private BisqEasyOpenTradeChannel channel(String tradeId, BisqEasyTradeReadModel trade) {
         BisqEasyOpenTradeChannel channel = mock(BisqEasyOpenTradeChannel.class);
         when(channel.getTradeId()).thenReturn(tradeId);
         when(channel.isInMediationObservable()).thenReturn(new Observable<>(false));

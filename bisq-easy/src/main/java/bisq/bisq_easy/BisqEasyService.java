@@ -206,7 +206,9 @@ public class BisqEasyService implements Service {
             selectedMarketPin.unbind();
             authorizedAlertDataSetPin.unbind();
         }
-        return getStorePendingMessagesInMailboxFuture().exceptionally(e -> false) // continue even if flush fails
+        return bisqEasyTradeActionService.quiesce()
+                .thenCompose(ignored -> tradeService.getBisqEasyTradeService().quiesce())
+                .thenCompose(ignored -> getStorePendingMessagesInMailboxFuture()).exceptionally(e -> false) // continue even if flush fails
                 .thenCompose(v -> CompletableFutureUtils.allOf( // shut down in parallel
                         bisqEasyNotificationsService.shutdown().exceptionally(e -> false),
                         bisqEasyMobileTradeNotificationService.shutdown().exceptionally(e -> false),

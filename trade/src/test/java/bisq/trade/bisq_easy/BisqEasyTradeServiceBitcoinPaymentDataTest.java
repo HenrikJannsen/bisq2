@@ -17,11 +17,11 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.identity.Identity;
 import bisq.trade.ServiceProvider;
-import bisq.trade.TradeActionNotAppliedException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 
 import java.util.Optional;
 
@@ -30,8 +30,9 @@ import static bisq.trade.bisq_easy.BisqEasyTradeTestData.buyerAsTakerTrade;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.contract;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.offer;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static bisq.trade.bisq_easy.BisqEasyTradeServiceTestSupport.assertFutureFailure;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 
@@ -44,24 +45,36 @@ class BisqEasyTradeServiceBitcoinPaymentDataTest {
     private static final String ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
 
     private final BisqEasyTradeService service =
-            new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+            BisqEasyTradeServiceTestSupport.service(mock(ServiceProvider.class, RETURNS_DEEP_STUBS));
     private final Identity buyerIdentity = identity("buyer");
     private final BisqEasyTrade trade = buyerAsTakerTrade(
             contract(offer("offer-id", identity("seller").getNetworkId(), QUOTE_AMOUNT), buyerIdentity.getNetworkId(),
                     Optional.empty()),
             buyerIdentity);
 
+    @BeforeEach
+    void setUp() {
+        service.getPersistableStore().addTrade(trade);
+        service.initialize().join();
+    }
+
+    @AfterEach
+    void tearDown() {
+        service.shutdown().join();
+    }
+
     @Test
     void dataForAnotherAmountIsNotSent() {
-        assertThrows(IllegalArgumentException.class,
-                () -> service.buyerSendBitcoinPaymentData(trade, "bitcoin:" + ADDRESS + "?amount=0.01"));
+        assertFutureFailure(IllegalArgumentException.class,
+                () -> service.buyerSendBitcoinPaymentData(service.findTrade(trade.getId()).orElseThrow(),
+                        "bitcoin:" + ADDRESS + "?amount=0.01").join());
 
         assertTrue(trade.getBitcoinPaymentData().isEmpty());
     }
 
     @Test
     void addressPassesTheCheck() {
-        // Without a protocol of the trade the action is not applied, after the check let the data through
-        assertThrows(TradeActionNotAppliedException.class, () -> service.buyerSendBitcoinPaymentData(trade, ADDRESS));
+        assertDoesNotThrow(() -> service.buyerSendBitcoinPaymentData(
+                service.findTrade(trade.getId()).orElseThrow(), ADDRESS).join());
     }
 }

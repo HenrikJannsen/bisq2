@@ -26,7 +26,7 @@ import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannelService;
 import bisq.common.observable.Observable;
 import bisq.common.observable.collection.ObservableSet;
 import bisq.trade.TradeService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.user.UserService;
 import org.junit.jupiter.api.Test;
@@ -50,11 +50,11 @@ class OpenTradeItemsServiceTest {
 
     @Test
     void addsItemOnceAndKeepsLookupInSyncOnRemove() {
-        ObservableSet<BisqEasyTrade> trades = new ObservableSet<>();
+        ObservableSet<BisqEasyTradeReadModel> trades = new ObservableSet<>();
         ObservableSet<BisqEasyOpenTradeChannel> channels = new ObservableSet<>();
         BisqEasyTradeService bisqEasyTradeService = mock(BisqEasyTradeService.class);
         BisqEasyOpenTradeChannelService channelService = mock(BisqEasyOpenTradeChannelService.class);
-        BisqEasyTrade trade = trade();
+        BisqEasyTradeReadModel trade = trade();
         BisqEasyOpenTradeChannel channel = channel();
         when(bisqEasyTradeService.findTrade(TRADE_ID)).thenReturn(Optional.of(trade));
         when(channelService.findChannelByTradeId(TRADE_ID)).thenReturn(Optional.of(channel));
@@ -78,11 +78,11 @@ class OpenTradeItemsServiceTest {
 
     @Test
     void clearAlsoClearsTheLookupIndex() {
-        ObservableSet<BisqEasyTrade> trades = new ObservableSet<>();
+        ObservableSet<BisqEasyTradeReadModel> trades = new ObservableSet<>();
         ObservableSet<BisqEasyOpenTradeChannel> channels = new ObservableSet<>();
         BisqEasyTradeService bisqEasyTradeService = mock(BisqEasyTradeService.class);
         BisqEasyOpenTradeChannelService channelService = mock(BisqEasyOpenTradeChannelService.class);
-        BisqEasyTrade trade = trade();
+        BisqEasyTradeReadModel trade = trade();
         BisqEasyOpenTradeChannel channel = channel();
         when(channelService.findChannelByTradeId(TRADE_ID)).thenReturn(Optional.of(channel));
 
@@ -104,7 +104,7 @@ class OpenTradeItemsServiceTest {
         }
     }
 
-    private OpenTradeItemsService newService(ObservableSet<BisqEasyTrade> trades,
+    private OpenTradeItemsService newService(ObservableSet<BisqEasyTradeReadModel> trades,
                                              ObservableSet<BisqEasyOpenTradeChannel> channels,
                                              BisqEasyTradeService bisqEasyTradeService,
                                              BisqEasyOpenTradeChannelService channelService) {
@@ -122,8 +122,8 @@ class OpenTradeItemsServiceTest {
         return service;
     }
 
-    private BisqEasyTrade trade() {
-        BisqEasyTrade trade = mock(BisqEasyTrade.class);
+    private BisqEasyTradeReadModel trade() {
+        BisqEasyTradeReadModel trade = mock(BisqEasyTradeReadModel.class);
         when(trade.getId()).thenReturn(TRADE_ID);
         return trade;
     }

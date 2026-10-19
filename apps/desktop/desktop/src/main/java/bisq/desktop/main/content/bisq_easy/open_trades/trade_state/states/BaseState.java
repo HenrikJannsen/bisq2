@@ -23,18 +23,19 @@ import bisq.bisq_easy.BisqEasyTradeActionService;
 import bisq.chat.ChatService;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannelService;
-import bisq.chat.priv.LeavePrivateChatManager;
 import bisq.common.monetary.Coin;
 import bisq.common.monetary.Fiat;
 import bisq.desktop.ServiceProvider;
-import bisq.desktop.common.utils.TradeExceptionHandler;
+import bisq.desktop.common.utils.AsyncTradeAction;
 import bisq.desktop.components.controls.WrappingText;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingAnimation;
 import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.presentation.formatters.AmountFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.user.identity.UserIdentityService;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.geometry.Pos;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -43,6 +44,8 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 @Slf4j
 public abstract class BaseState {
@@ -50,16 +53,16 @@ public abstract class BaseState {
         protected final M model;
         @Getter
         protected final V view;
+        protected final AsyncTradeAction tradeAction = new AsyncTradeAction();
         protected final BisqEasyTradeService bisqEasyTradeService;
         protected final ChatService chatService;
         protected final BisqEasyTradeActionService tradeActionService;
         protected final AccountService accountService;
         protected final UserIdentityService userIdentityService;
         protected final BisqEasyOpenTradeChannelService channelService;
-        protected final LeavePrivateChatManager leavePrivateChatManager;
 
         protected Controller(ServiceProvider serviceProvider,
-                             BisqEasyTrade bisqEasyTrade,
+                             BisqEasyTradeReadModel bisqEasyTrade,
                              BisqEasyOpenTradeChannel channel) {
             chatService = serviceProvider.getChatService();
             tradeActionService = serviceProvider.getBisqEasyService().getBisqEasyTradeActionService();
@@ -67,18 +70,19 @@ public abstract class BaseState {
             accountService = serviceProvider.getAccountService();
             userIdentityService = serviceProvider.getUserService().getUserIdentityService();
             channelService = serviceProvider.getChatService().getBisqEasyOpenTradeChannelService();
-            leavePrivateChatManager = chatService.getLeavePrivateChatManager();
 
             model = createModel(bisqEasyTrade, channel);
+            model.getActionPending().bind(tradeAction.pendingProperty());
             view = createView();
         }
 
         protected abstract V createView();
 
-        protected abstract M createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel);
+        protected abstract M createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel);
 
         @Override
         public void onActivate() {
+            tradeAction.activate();
             BisqEasyOffer bisqEasyOffer = model.getBisqEasyOffer();
             model.setQuoteCode(bisqEasyOffer.getMarket().getQuoteCurrencyCode());
 
@@ -92,6 +96,7 @@ public abstract class BaseState {
 
         @Override
         public void onDeactivate() {
+            tradeAction.deactivate();
         }
 
         protected Optional<String> findUsersAccountData() {
@@ -103,18 +108,20 @@ public abstract class BaseState {
                     .findFirst();
         }
 
-        protected void runTradeAction(Runnable action, String encoded) {
-            TradeExceptionHandler.run(() -> tradeActionService.executeAndSendTradeLog(action, model.getChannel(), encoded));
+        protected void runTradeAction(Supplier<CompletableFuture<Void>> action, String encoded) {
+            tradeAction.run(() -> tradeActionService.executeAndSendTradeLog(action, model.getChannel(), encoded));
         }
 
-        protected void sendTradeLogMessage(String encoded) {
-            chatService.getBisqEasyOpenTradeChannelService().sendTradeLogMessage(encoded, model.getChannel());
+        protected void runTradeAction(Supplier<CompletableFuture<Void>> action) {
+            tradeAction.run(action);
         }
+
     }
 
     @Getter
     protected static class Model implements bisq.desktop.common.view.Model {
-        protected final BisqEasyTrade trade;
+        protected final BooleanProperty actionPending = new SimpleBooleanProperty();
+        protected final BisqEasyTradeReadModel trade;
         protected final BisqEasyOpenTradeChannel channel;
         @Setter
         protected String quoteCode;
@@ -127,7 +134,7 @@ public abstract class BaseState {
         @Setter
         protected String formattedQuoteAmount;
 
-        protected Model(BisqEasyTrade trade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel trade, BisqEasyOpenTradeChannel channel) {
             this.trade = trade;
             this.channel = channel;
         }
@@ -146,10 +153,12 @@ public abstract class BaseState {
 
         @Override
         protected void onViewAttached() {
+            root.disableProperty().bind(model.getActionPending());
         }
 
         @Override
         protected void onViewDetached() {
+            root.disableProperty().unbind();
         }
 
         protected HBox createWaitingInfo(WaitingAnimation animation, WrappingText headline, WrappingText info) {

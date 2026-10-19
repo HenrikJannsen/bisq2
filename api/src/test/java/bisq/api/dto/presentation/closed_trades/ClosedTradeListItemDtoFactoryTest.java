@@ -22,9 +22,11 @@ import bisq.api.dto.common.monetary.PriceQuoteDto;
 import bisq.api.dto.user.profile.UserProfileDto;
 import bisq.common.market.MarketRepository;
 import bisq.trade.TradeRole;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
+import bisq.trade.bisq_easy.BisqEasyTradeSnapshot;
+import bisq.trade.TradeLifecycleState;
 import bisq.trade.bisq_easy.BisqEasyTradeFormatter;
-import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
+import bisq.trade.bisq_easy.BisqEasyClosedTradeReadModel;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.user.profile.UserProfile;
 import bisq.user.reputation.ReputationScore;
@@ -44,7 +46,7 @@ import static org.mockito.Mockito.when;
 class ClosedTradeListItemDtoFactoryTest {
     @Test
     void indexesCancelledTradeBeforePaymentDetailsWereExchanged() {
-        BisqEasyTrade trade = trade();
+        BisqEasyTradeReadModel trade = trade();
         when(trade.getPaymentAccountData()).thenReturn(Optional.empty());
         when(trade.getBitcoinPaymentData()).thenReturn(Optional.empty());
         when(trade.getPaymentProof()).thenReturn(Optional.empty());
@@ -59,7 +61,7 @@ class ClosedTradeListItemDtoFactoryTest {
 
     @Test
     void retainsPaymentDetailsWhenPresent() {
-        BisqEasyTrade trade = trade();
+        BisqEasyTradeReadModel trade = trade();
         when(trade.getPaymentAccountData()).thenReturn(Optional.of("account"));
         when(trade.getBitcoinPaymentData()).thenReturn(Optional.of("bitcoin-address"));
         when(trade.getPaymentProof()).thenReturn(Optional.of("transaction-id"));
@@ -71,16 +73,20 @@ class ClosedTradeListItemDtoFactoryTest {
         assertEquals(Optional.of("transaction-id"), dto.paymentProof());
     }
 
-    private static BisqEasyTrade trade() {
-        BisqEasyTrade trade = mock(BisqEasyTrade.class, RETURNS_DEEP_STUBS);
+    private static BisqEasyTradeReadModel trade() {
+        BisqEasyTradeReadModel trade = mock(BisqEasyTradeReadModel.class, RETURNS_DEEP_STUBS);
         when(trade.getId()).thenReturn("closed-trade");
         when(trade.getTradeRole()).thenReturn(TradeRole.BUYER_AS_TAKER);
         when(trade.getTradeState()).thenReturn(BisqEasyTradeState.CANCELLED);
+        when(trade.getSnapshot()).thenAnswer(invocation -> new BisqEasyTradeSnapshot(
+                trade.getTradeState(), null, trade.getPaymentAccountData(), trade.getBitcoinPaymentData(),
+                trade.getPaymentProof(), trade.getTradeCompletedDate(), null, null, null, null, null, null,
+                null, TradeLifecycleState.ACTIVE));
         when(trade.getOffer().getMarket()).thenReturn(MarketRepository.getUSDBitcoinMarket());
         return trade;
     }
 
-    private static ClosedTradeIndexedItem create(BisqEasyTrade trade) {
+    private static ClosedTradeIndexedItem create(BisqEasyTradeReadModel trade) {
         UserProfile profile = mock(UserProfile.class);
         when(profile.getId()).thenReturn("profile");
         ReputationService reputationService = mock(ReputationService.class);
@@ -95,7 +101,7 @@ class ClosedTradeListItemDtoFactoryTest {
                      invocation -> priceQuoteDto);
              MockedStatic<BisqEasyTradeFormatter> formatter = mockStatic(BisqEasyTradeFormatter.class,
                      invocation -> "formatted")) {
-            return ClosedTradeListItemDtoFactory.create(new BisqEasyClosedTrade(trade, profile, profile), reputationService);
+            return ClosedTradeListItemDtoFactory.create(new BisqEasyClosedTradeReadModel(trade, profile, profile), reputationService);
         }
     }
 }

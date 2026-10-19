@@ -45,6 +45,7 @@ public abstract class BisqEasyProtocol extends TradeProtocol<BisqEasyTrade> {
 
     @Override
     public synchronized void handle(Event event) {
+        getServiceProvider().getBisqEasyTradeService().assertTradeThread();
         // Persistence reads the state and deferred messages together under the model lock. Keep the protocol lock
         // first, as in Fsm, so a snapshot cannot contain the old state after its deferred message was consumed.
         synchronized (model) {
@@ -59,7 +60,7 @@ public abstract class BisqEasyProtocol extends TradeProtocol<BisqEasyTrade> {
 
     @Override
     protected void persist() {
-        getServiceProvider().getBisqEasyTradeService().persist();
+        getServiceProvider().getBisqEasyTradeService().requestPersistence();
     }
 
     public BisqEasyTrade getTrade() {

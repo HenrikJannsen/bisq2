@@ -28,7 +28,7 @@ import bisq.desktop.components.controls.AutoCompleteComboBox;
 import bisq.desktop.components.controls.MaterialTextArea;
 import bisq.desktop.components.overlay.Popup;
 import bisq.i18n.Res;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyAccountDataMessage;
 import bisq.user.profile.UserProfile;
 import javafx.beans.property.BooleanProperty;
@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
 public class SellerState1 extends BaseState {
     private final Controller controller;
 
-    public SellerState1(ServiceProvider serviceProvider, BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+    public SellerState1(ServiceProvider serviceProvider, BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
         controller = new Controller(serviceProvider, bisqEasyTrade, channel);
     }
 
@@ -70,12 +70,12 @@ public class SellerState1 extends BaseState {
     private static class Controller extends BaseState.Controller<Model, View> {
         private Pin accountsPin, selectedAccountPin;
 
-        private Controller(ServiceProvider serviceProvider, BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        private Controller(ServiceProvider serviceProvider, BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -154,7 +154,7 @@ public class SellerState1 extends BaseState {
         private final SortedList<UserDefinedFiatAccount> sortedAccounts = new SortedList<>(accounts);
         private final ObjectProperty<UserDefinedFiatAccount> selectedAccount = new SimpleObjectProperty<>();
 
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
 
@@ -210,6 +210,14 @@ public class SellerState1 extends BaseState {
                     button,
                     Spacer.fillVBox(),
                     FormUtils.getHelp(Res.get("bisqEasy.tradeState.info.seller.phase1.note")));
+        }
+
+        MaterialTextArea paymentAccountInput() {
+            return paymentAccountData;
+        }
+
+        Button sendPaymentAccountAction() {
+            return button;
         }
 
         @Override

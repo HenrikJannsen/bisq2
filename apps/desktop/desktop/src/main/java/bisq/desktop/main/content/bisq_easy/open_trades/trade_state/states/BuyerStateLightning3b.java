@@ -25,7 +25,7 @@ import bisq.desktop.components.controls.validator.LightningPreImageValidator;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingAnimation;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingState;
 import bisq.i18n.Res;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.layout.HBox;
@@ -41,7 +41,7 @@ public class BuyerStateLightning3b extends BaseState {
     private final Controller controller;
 
     public BuyerStateLightning3b(ServiceProvider serviceProvider,
-                                 BisqEasyTrade bisqEasyTrade,
+                                 BisqEasyTradeReadModel bisqEasyTrade,
                                  BisqEasyOpenTradeChannel channel) {
         controller = new Controller(serviceProvider, bisqEasyTrade, channel);
     }
@@ -52,13 +52,13 @@ public class BuyerStateLightning3b extends BaseState {
 
     private static class Controller extends BaseState.Controller<Model, View> {
         private Controller(ServiceProvider serviceProvider,
-                           BisqEasyTrade bisqEasyTrade,
+                           BisqEasyTradeReadModel bisqEasyTrade,
                            BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -90,7 +90,7 @@ public class BuyerStateLightning3b extends BaseState {
         @Setter
         protected Optional<String> paymentProof = Optional.empty();
 
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

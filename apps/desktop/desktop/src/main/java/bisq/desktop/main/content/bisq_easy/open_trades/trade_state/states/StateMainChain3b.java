@@ -33,13 +33,12 @@ import bisq.desktop.components.controls.MaterialTextField;
 import bisq.desktop.components.controls.WrappingText;
 import bisq.desktop.components.controls.validator.BitcoinTransactionValidator;
 import bisq.desktop.components.controls.validator.ExplorerResultValidator;
-import bisq.desktop.common.utils.TradeExceptionHandler;
 import bisq.desktop.components.overlay.Popup;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingAnimation;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingState;
 import bisq.i18n.Res;
 import bisq.presentation.formatters.AmountFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import de.jensd.fx.fontawesome.AwesomeIcon;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
@@ -69,13 +68,13 @@ public abstract class StateMainChain3b<C extends StateMainChain3b.Controller<?, 
     protected final C controller;
 
     protected StateMainChain3b(ServiceProvider serviceProvider,
-                               BisqEasyTrade bisqEasyTrade,
+                               BisqEasyTradeReadModel bisqEasyTrade,
                                BisqEasyOpenTradeChannel channel) {
         controller = getController(serviceProvider, bisqEasyTrade, channel);
     }
 
     protected abstract C getController(ServiceProvider serviceProvider,
-                                       BisqEasyTrade bisqEasyTrade,
+                                       BisqEasyTradeReadModel bisqEasyTrade,
                                        BisqEasyOpenTradeChannel channel);
 
     protected static abstract class Controller<M extends StateMainChain3b.Model, V extends StateMainChain3b.View<?, ?>> extends BaseState.Controller<M, V> {
@@ -88,7 +87,7 @@ public abstract class StateMainChain3b<C extends StateMainChain3b.Controller<?, 
         private CompletableFuture<Tx> requestFuture;
 
         protected Controller(ServiceProvider serviceProvider,
-                             BisqEasyTrade bisqEasyTrade,
+                             BisqEasyTradeReadModel bisqEasyTrade,
                              BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
 
@@ -99,8 +98,9 @@ public abstract class StateMainChain3b<C extends StateMainChain3b.Controller<?, 
         public void onActivate() {
             super.onActivate();
 
-            model.setPaymentProof(model.getTrade().getPaymentProof().orElse(null));
-            model.setBitcoinPaymentData(model.getTrade().getBitcoinPaymentData().orElse(null));
+            var snapshot = model.getTrade().getSnapshot();
+            model.setPaymentProof(snapshot.paymentProof().orElse(null));
+            model.setBitcoinPaymentData(snapshot.bitcoinPaymentData().orElse(null));
 
             if (model.getConfirmationState().get() == null) {
                 model.getConfirmationState().set(Model.ConfirmationState.REQUEST_STARTED);
@@ -171,7 +171,7 @@ public abstract class StateMainChain3b<C extends StateMainChain3b.Controller<?, 
         private void doCompleteTrade() {
             // todo should we send a system message? if so we should change the text
             //sendTradeLogMessage(Res.get("bisqEasy.tradeState.info.phase3b.tradeLogMessage", model.getChannel().getMyUserIdentity().getUserName()));
-            TradeExceptionHandler.run(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()));
+            runTradeAction(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()));
         }
 
         private void requestTx() {
@@ -282,7 +282,7 @@ public abstract class StateMainChain3b<C extends StateMainChain3b.Controller<?, 
         private final ObjectProperty<ConfirmationState> confirmationState = new SimpleObjectProperty<>();
         private final ExplorerResultValidator explorerResultValidator = new ExplorerResultValidator();
 
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
             role = this instanceof BuyerStateMainChain3b.Model ? "buyer" : "seller";
         }

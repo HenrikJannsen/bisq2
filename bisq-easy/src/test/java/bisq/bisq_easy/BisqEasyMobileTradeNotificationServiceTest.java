@@ -18,11 +18,13 @@
 package bisq.bisq_easy;
 
 import bisq.common.observable.Observable;
+import bisq.common.observable.Pin;
 import bisq.common.observable.collection.ObservableSet;
+import bisq.common.observable.collection.CollectionObserver;
 import bisq.i18n.Res;
 import bisq.notifications.Notification;
 import bisq.notifications.NotificationService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.user.profile.UserProfileService;
@@ -31,9 +33,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,16 +52,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class BisqEasyMobileTradeNotificationServiceTest {
-    private final ObservableSet<BisqEasyTrade> trades = new ObservableSet<>();
+    private final BisqEasyTradeService tradeService = mock(BisqEasyTradeService.class);
+    private final ObservableSet<BisqEasyTradeReadModel> trades = new ObservableSet<>();
     private final Observable<BisqEasyTradeState> state = new Observable<>(BisqEasyTradeState.INIT);
-    private final BisqEasyTrade trade = mock(BisqEasyTrade.class, RETURNS_DEEP_STUBS);
+    private final BisqEasyTradeReadModel trade = mock(BisqEasyTradeReadModel.class, RETURNS_DEEP_STUBS);
     private final List<Notification> notifications = new ArrayList<>();
     private BisqEasyMobileTradeNotificationService service;
 
     @BeforeEach
     void setUp() {
         Res.setAndApplyLanguageTag("en");
-        BisqEasyTradeService tradeService = mock(BisqEasyTradeService.class);
         when(tradeService.getTrades()).thenReturn(trades);
         when(trade.getId()).thenReturn("trade123456");
         when(trade.tradeStateObservable()).thenReturn(state);
@@ -126,6 +134,91 @@ class BisqEasyMobileTradeNotificationServiceTest {
         trades.add(trade);
 
         assertTrue(notifications.isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void lateStateSubscriptionIsClosedAfterRemovalOrShutdown(boolean shutdown) throws Exception {
+        CountDownLatch subscribed = new CountDownLatch(1);
+        CountDownLatch returnPin = new CountDownLatch(1);
+        AtomicBoolean pinClosed = new AtomicBoolean();
+        Observable<BisqEasyTradeState> delayedState = new Observable<>(BisqEasyTradeState.INIT) {
+            @Override
+            public Pin addObserver(Consumer<BisqEasyTradeState> observer) {
+                Pin pin = super.addObserver(observer);
+                subscribed.countDown();
+                try {
+                    assertTrue(returnPin.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(exception);
+                }
+                return () -> {
+                    pinClosed.set(true);
+                    pin.unbind();
+                };
+            }
+        };
+        when(trade.tradeStateObservable()).thenReturn(delayedState);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var addingTrade = executor.submit(() -> trades.add(trade));
+            try {
+                assertTrue(subscribed.await(5, TimeUnit.SECONDS));
+                if (shutdown) {
+                    service.shutdown().join();
+                } else {
+                    trades.remove(trade);
+                }
+                // Even before addObserver returns its Pin, its callback must have lost ownership.
+                delayedState.set(BisqEasyTradeState.BTC_CONFIRMED);
+                delayedState.set(BisqEasyTradeState.FAILED);
+            } finally {
+                returnPin.countDown();
+            }
+            addingTrade.get(5, TimeUnit.SECONDS);
+            assertTrue(pinClosed.get(), "The Pin returned after removal/shutdown must be unbound");
+            assertTrue(notifications.isEmpty(), "A closed subscription must not dispatch late notifications");
+        }
+    }
+
+    @Test
+    void initializationFinishingAfterShutdownUnbindsTheCollectionObserver() throws Exception {
+        service.shutdown().join();
+        CountDownLatch subscribed = new CountDownLatch(1);
+        CountDownLatch returnPin = new CountDownLatch(1);
+        AtomicBoolean pinClosed = new AtomicBoolean();
+        var delayedTrades = new ObservableSet<BisqEasyTradeReadModel>() {
+            @Override
+            public Pin addObserver(CollectionObserver<BisqEasyTradeReadModel> observer) {
+                Pin pin = super.addObserver(observer);
+                subscribed.countDown();
+                try {
+                    assertTrue(returnPin.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(exception);
+                }
+                return () -> {
+                    pinClosed.set(true);
+                    pin.unbind();
+                };
+            }
+        };
+        when(tradeService.getTrades()).thenReturn(delayedTrades);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var initializing = executor.submit(service::initialize);
+            try {
+                assertTrue(subscribed.await(5, TimeUnit.SECONDS));
+                service.shutdown().join();
+            } finally {
+                returnPin.countDown();
+            }
+            initializing.get(5, TimeUnit.SECONDS);
+            assertTrue(pinClosed.get(), "The collection Pin returned after shutdown must be unbound");
+            delayedTrades.add(trade);
+            state.set(BisqEasyTradeState.BTC_CONFIRMED);
+            assertTrue(notifications.isEmpty());
+        }
     }
 
     private long offerTakenNotifications() {

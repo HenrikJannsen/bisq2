@@ -33,14 +33,12 @@ import bisq.chat.ChatService;
 import bisq.chat.bisq_easy.offerbook.BisqEasyOfferbookChannel;
 import bisq.chat.bisq_easy.offerbook.BisqEasyOfferbookChannelService;
 import bisq.chat.bisq_easy.offerbook.BisqEasyOfferbookMessage;
-import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannelService;
 import bisq.common.application.DevMode;
 import bisq.common.market.Market;
 import bisq.common.monetary.Monetary;
 import bisq.common.monetary.PriceQuote;
 import bisq.common.observable.Pin;
 import bisq.common.util.StringUtils;
-import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.threading.UIScheduler;
 import bisq.desktop.common.threading.UIThread;
@@ -67,14 +65,14 @@ import bisq.presentation.formatters.PriceFormatter;
 import bisq.settings.ChatMessageType;
 import bisq.settings.SettingsService;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.trade.bisq_easy.validation.MarketPriceNotCurrentException;
 import bisq.trade.exceptions.TradeProtocolException;
 import bisq.trade.exceptions.TradeProtocolFailure;
-import bisq.desktop.common.utils.TradeExceptionHandler;
-import bisq.trade.TradeRestrictedException;
+import bisq.desktop.common.utils.AsyncTradeAction;
+import bisq.bisq_easy.BisqEasyTradeActionService;
 import bisq.user.banned.BannedUserService;
 import bisq.user.identity.UserIdentity;
 import bisq.user.identity.UserIdentityService;
@@ -101,7 +99,6 @@ public class TradeWizardReviewController implements Controller {
     private final TradeWizardReviewModel model;
     @Getter
     private final TradeWizardReviewView view;
-    private final BisqEasyOpenTradeChannelService bisqEasyOpenTradeChannelService;
     private final ChatService chatService;
     private final Consumer<NavigationTarget> closeAndNavigateToHandler;
     private final Consumer<Boolean> mainButtonsVisibleHandler;
@@ -117,6 +114,11 @@ public class TradeWizardReviewController implements Controller {
     private final BisqEasyMediationRequestService bisqEasyMediationRequestService;
     private Pin errorMessagePin, peersErrorMessagePin;
     private UIScheduler timeoutScheduler;
+    private final BisqEasyTradeActionService tradeActionService;
+    private boolean active;
+    private boolean takeOfferPending;
+    private long takeOfferGeneration;
+    private Optional<BisqEasyTradeActionService.TakeOfferAttempt> takeOfferAttempt = Optional.empty();
 
     public TradeWizardReviewController(ServiceProvider serviceProvider,
                                        Consumer<Boolean> mainButtonsVisibleHandler,
@@ -127,9 +129,9 @@ public class TradeWizardReviewController implements Controller {
         userIdentityService = serviceProvider.getUserService().getUserIdentityService();
         chatService = serviceProvider.getChatService();
         bisqEasyOfferbookChannelService = chatService.getBisqEasyOfferbookChannelService();
-        bisqEasyOpenTradeChannelService = chatService.getBisqEasyOpenTradeChannelService();
         marketPriceService = serviceProvider.getBondedRolesService().getMarketPriceService();
         bisqEasyTradeService = serviceProvider.getTradeService().getBisqEasyTradeService();
+        tradeActionService = serviceProvider.getBisqEasyService().getBisqEasyTradeActionService();
         bannedUserService = serviceProvider.getUserService().getBannedUserService();
         userProfileService = serviceProvider.getUserService().getUserProfileService();
         settingsService = serviceProvider.getSettingsService();
@@ -419,6 +421,7 @@ public class TradeWizardReviewController implements Controller {
     }
 
     public void reset() {
+        clearTakeOfferAttempt();
         model.reset();
     }
 
@@ -474,40 +477,101 @@ public class TradeWizardReviewController implements Controller {
     }
 
     private void doTakeOffer(BisqEasyOffer bisqEasyOffer, UserIdentity takerIdentity, Optional<UserProfile> mediator) {
+        if (!active || takeOfferPending) {
+            return;
+        }
         Monetary takersBaseSideAmount = model.getFixBaseSideAmount();
         Monetary takersQuoteSideAmount = model.getFixQuoteSideAmount();
         BitcoinPaymentMethodSpec bitcoinPaymentMethodSpec = new BitcoinPaymentMethodSpec(model.getTakersSelectedBitcoinPaymentMethod());
         FiatPaymentMethodSpec fiatPaymentMethodSpec = new FiatPaymentMethodSpec(model.getTakersSelectedFiatPaymentMethod());
         long marketPrice = model.getMarketPrice();
-        BisqEasyProtocol bisqEasyProtocol;
-        try {
-            bisqEasyProtocol = bisqEasyTradeService.takerCreatesProtocol(takerIdentity.getIdentity(),
-                    bisqEasyOffer,
-                    takersBaseSideAmount,
-                    takersQuoteSideAmount,
-                    bitcoinPaymentMethodSpec,
-                    fiatPaymentMethodSpec,
-                    mediator,
-                    marketPrice);
-        } catch (TradeRestrictedException e) {
-            new Popup().warning(TradeExceptionHandler.localizedMessage(e)).show();
-            return;
-        } catch (TradeProtocolException e) {
-            if (e.getTradeProtocolFailure() != TradeProtocolFailure.SELLER_REPUTATION_TOO_LOW) {
-                throw e;
-            }
-            // The market prices changed since the amount was chosen
-            new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.sellerReputationTooLow")).show();
-            return;
-        } catch (MarketPriceNotCurrentException e) {
-            // Without current market prices the seller's reputation cannot be checked for the amount
-            new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.marketPriceNotCurrent")).show();
-            return;
-        }
-        BisqEasyTrade trade = bisqEasyProtocol.getModel();
-        log.info("Selected mediator for trade {}: {}", trade.getShortId(), mediator.map(UserProfile::getUserName).orElse("N/A"));
-        model.setBisqEasyTrade(trade);
+        takeOfferPending = true;
+        long attemptGeneration = ++takeOfferGeneration;
+        model.setBisqEasyTrade(null);
+        model.getTakeOfferStatus().set(TradeWizardReviewModel.TakeOfferStatus.SENT);
+        mainButtonsVisibleHandler.accept(false);
+        var attempt = tradeActionService.takeOffer(() -> bisqEasyTradeService.takerCreatesTrade(takerIdentity.getIdentity(),
+                bisqEasyOffer, takersBaseSideAmount, takersQuoteSideAmount, bitcoinPaymentMethodSpec,
+                fiatPaymentMethodSpec, mediator, marketPrice), bisqEasyTradeService, takerIdentity);
+        takeOfferAttempt = Optional.of(attempt);
+        observeTakeOfferAttempt(attempt, attemptGeneration);
+    }
 
+    private void observeTakeOfferAttempt(BisqEasyTradeActionService.TakeOfferAttempt attempt, long attemptGeneration) {
+        if (timeoutScheduler != null) {
+            timeoutScheduler.stop();
+        }
+        if (!attempt.result().isDone()) {
+            timeoutScheduler = UIScheduler.run(() -> {
+                        if (active && takeOfferGeneration == attemptGeneration) {
+                            closeAndNavigateToHandler.accept(NavigationTarget.BISQ_EASY);
+                        }
+                    }).after(150, TimeUnit.SECONDS);
+        }
+        attempt.createdTrade().thenAccept(trade -> UIThread.run(() -> {
+            if (active && takeOfferGeneration == attemptGeneration && takeOfferAttempt.orElse(null) == attempt) {
+                model.setBisqEasyTrade(trade);
+                bindTradeErrors(trade, attemptGeneration);
+            }
+        }));
+        attempt.result().whenComplete((trade, error) -> UIThread.run(() -> {
+            if (takeOfferAttempt.orElse(null) != attempt) {
+                return;
+            }
+            takeOfferPending = false;
+            if (!active || takeOfferGeneration != attemptGeneration) {
+                return;
+            }
+            if (timeoutScheduler != null) {
+                timeoutScheduler.stop();
+                timeoutScheduler = null;
+            }
+            if (error != null) {
+                resetTakeOfferStatusOnFailure();
+                BisqEasyTradeReadModel createdTrade = model.getBisqEasyTrade();
+                if (createdTrade == null || (createdTrade.getErrorMessage() == null && createdTrade.getPeersErrorMessage() == null)) {
+                    showTakeOfferFailure(AsyncTradeAction.unwrap(error));
+                }
+                return;
+            }
+            var snapshot = trade.getSnapshot();
+            if (snapshot.errorMessage() != null || snapshot.peersErrorMessage() != null) {
+                return;
+            }
+            ChatChannelSelectionService selection = chatService.getChatChannelSelectionService(ChatChannelDomain.BISQ_EASY_OFFERBOOK);
+            bisqEasyOfferbookChannelService.findChannel(trade.getOffer().getMarket()).ifPresent(selection::selectChannel);
+            model.getTakeOfferStatus().set(TradeWizardReviewModel.TakeOfferStatus.SUCCESS);
+        }));
+    }
+
+    private void clearTakeOfferAttempt() {
+        takeOfferAttempt = Optional.empty();
+        takeOfferPending = false;
+        takeOfferGeneration++;
+        if (errorMessagePin != null) {
+            errorMessagePin.unbind();
+        }
+        if (peersErrorMessagePin != null) {
+            peersErrorMessagePin.unbind();
+        }
+        if (timeoutScheduler != null) {
+            timeoutScheduler.stop();
+            timeoutScheduler = null;
+        }
+    }
+
+    private void showTakeOfferFailure(Throwable error) {
+        if (error instanceof TradeProtocolException protocolError &&
+                protocolError.getTradeProtocolFailure() == TradeProtocolFailure.SELLER_REPUTATION_TOO_LOW) {
+            new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.sellerReputationTooLow")).show();
+        } else if (error instanceof MarketPriceNotCurrentException) {
+            new Popup().warning(Res.get("bisqEasy.takeOffer.review.error.marketPriceNotCurrent")).show();
+        } else {
+            AsyncTradeAction.showError(error);
+        }
+    }
+
+    private void bindTradeErrors(BisqEasyTradeReadModel trade, long attemptGeneration) {
         // A previous attempt's observers must not survive into this attempt (retry case).
         if (errorMessagePin != null) {
             errorMessagePin.unbind();
@@ -518,6 +582,9 @@ public class TradeWizardReviewController implements Controller {
         errorMessagePin = trade.errorMessageObservable().addObserver(errorMessage -> {
                     if (errorMessage != null) {
                         UIThread.run(() -> {
+                            if (!active || takeOfferGeneration != attemptGeneration || model.getBisqEasyTrade() != trade) {
+                                return;
+                            }
                             resetTakeOfferStatusOnFailure();
                             if (trade.getTradeProtocolFailure() == null || trade.getTradeProtocolFailure().isUnexpected()) {
                                 String errorStackTrace = trade.getErrorStackTrace() != null ? StringUtils.truncate(trade.getErrorStackTrace(), 2000) : "";
@@ -539,6 +606,9 @@ public class TradeWizardReviewController implements Controller {
         peersErrorMessagePin = trade.peersErrorMessageObservable().addObserver(peersErrorMessage -> {
                     if (peersErrorMessage != null) {
                         UIThread.run(() -> {
+                            if (!active || takeOfferGeneration != attemptGeneration || model.getBisqEasyTrade() != trade) {
+                                return;
+                            }
                             resetTakeOfferStatusOnFailure();
                             if (trade.getPeersTradeProtocolFailure() == null || trade.getPeersTradeProtocolFailure().isUnexpected()) {
                                 String errorStackTrace = trade.getPeersErrorStackTrace() != null ? StringUtils.truncate(trade.getPeersErrorStackTrace(), 2000) : "";
@@ -561,63 +631,6 @@ public class TradeWizardReviewController implements Controller {
                 }
         );
 
-        try {
-            bisqEasyTradeService.takeOffer(trade);
-        } catch (TradeRestrictedException e) {
-            // The error observers were already bound above; unbind them so a retry doesn't stack them.
-            if (errorMessagePin != null) {
-                errorMessagePin.unbind();
-                errorMessagePin = null;
-            }
-            if (peersErrorMessagePin != null) {
-                peersErrorMessagePin.unbind();
-                peersErrorMessagePin = null;
-            }
-            new Popup().warning(TradeExceptionHandler.localizedMessage(e)).show();
-            return;
-        }
-        model.getTakeOfferStatus().set(TradeWizardReviewModel.TakeOfferStatus.SENT);
-
-        BisqEasyContract contract = trade.getContract();
-
-        mainButtonsVisibleHandler.accept(false);
-        String tradeId = trade.getId();
-
-        if (timeoutScheduler != null) {
-            timeoutScheduler.stop();
-        }
-        UIScheduler attemptTimeoutScheduler = UIScheduler.run(() -> {
-                    closeAndNavigateToHandler.accept(NavigationTarget.BISQ_EASY);
-                    throw new RuntimeException("Take offer message sending did not succeed after 2 minutes.");
-                })
-                .after(150, TimeUnit.SECONDS); // We have 120 seconds socket timeout, so we should never get triggered here, as the message will be sent as mailbox message
-        timeoutScheduler = attemptTimeoutScheduler;
-
-        bisqEasyOpenTradeChannelService.sendTakeOfferMessage(tradeId, bisqEasyOffer, contract.getMediator())
-                .thenAccept(result -> UIThread.run(() -> {
-                    attemptTimeoutScheduler.stop();
-                    if (timeoutScheduler == attemptTimeoutScheduler) {
-                        timeoutScheduler = null;
-                    }
-                    if (trade.getErrorMessage() != null || trade.getPeersErrorMessage() != null) {
-                        // The maker rejected the take offer; the error observer already informed the user.
-                        return;
-                    }
-
-                    // In case the user has switched to another market we want to select that market in the offer book
-                    ChatChannelSelectionService chatChannelSelectionService =
-                            chatService.getChatChannelSelectionService(ChatChannelDomain.BISQ_EASY_OFFERBOOK);
-                    bisqEasyOfferbookChannelService.findChannel(contract.getOffer().getMarket())
-                            .ifPresent(chatChannelSelectionService::selectChannel);
-                    model.getTakeOfferStatus().set(TradeWizardReviewModel.TakeOfferStatus.SUCCESS);
-                    bisqEasyOpenTradeChannelService.findChannelByTradeId(tradeId)
-                            .ifPresent(channel -> {
-                                String taker = userIdentityService.getSelectedUserIdentity().getUserProfile().getUserName();
-                                String maker = channel.getPeer().getUserName();
-                                String encoded = Res.encode("bisqEasy.takeOffer.tradeLogMessage", taker, maker);
-                                chatService.getBisqEasyOpenTradeChannelService().sendTradeLogMessage(encoded, channel);
-                            });
-                }));
     }
 
     private void resetTakeOfferStatusOnFailure() {
@@ -630,6 +643,7 @@ public class TradeWizardReviewController implements Controller {
 
     @Override
     public void onActivate() {
+        active = true;
         model.getShowCreateOfferSuccess().set(false);
         Direction direction = model.getBisqEasyOffer().getDirection();
         boolean isMainChain = model.getBitcoinPaymentMethods().stream().anyMatch(e -> e.getPaymentRail() == BitcoinPaymentRail.MAIN_CHAIN);
@@ -649,10 +663,13 @@ public class TradeWizardReviewController implements Controller {
                 model.setFee(Res.get("bisqEasy.tradeWizard.review.noTradeFees"));
             }
         }
+        takeOfferAttempt.ifPresent(attempt -> observeTakeOfferAttempt(attempt, ++takeOfferGeneration));
     }
 
     @Override
     public void onDeactivate() {
+        active = false;
+        takeOfferGeneration++;
         if (errorMessagePin != null) {
             errorMessagePin.unbind();
         }

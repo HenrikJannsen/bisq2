@@ -31,7 +31,7 @@ import bisq.offer.price.spec.PriceSpecFormatter;
 import bisq.presentation.formatters.DateFormatter;
 import bisq.presentation.formatters.PriceFormatter;
 import bisq.presentation.formatters.TimeFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeFormatter;
 import bisq.user.profile.UserProfile;
 import lombok.EqualsAndHashCode;
@@ -47,11 +47,11 @@ public class TradeDetailsController extends NavigationController implements Init
     @EqualsAndHashCode
     @ToString
     public static class InitData {
-        private final BisqEasyTrade bisqEasyTrade;
+        private final BisqEasyTradeReadModel bisqEasyTrade;
         private final UserProfile myUserProfile, peerProfile;
         private final Optional<UserProfile> mediator;
 
-        public InitData(BisqEasyTrade bisqEasyTrade,
+        public InitData(BisqEasyTradeReadModel bisqEasyTrade,
                         UserProfile myUserProfile,
                         UserProfile peerProfile,
                         Optional<UserProfile> mediator) {
@@ -85,12 +85,13 @@ public class TradeDetailsController extends NavigationController implements Init
 
     @Override
     public void onActivate() {
-        BisqEasyTrade trade = model.getTrade();
+        BisqEasyTradeReadModel trade = model.getTrade();
+        var snapshot = trade.getSnapshot();
         BisqEasyContract contract = trade.getContract();
 
         model.setTradeDate(DateFormatter.formatDateTime(contract.getTakeOfferDate()));
 
-        Optional<String> tradeDuration = trade.getTradeCompletedDate()
+        Optional<String> tradeDuration = snapshot.tradeCompletedDate()
                 .map(tradeCompletedDate -> tradeCompletedDate - contract.getTakeOfferDate())
                 .map(TimeFormatter::formatAge);
         model.setTradeDuration(tradeDuration);
@@ -115,7 +116,7 @@ public class TradeDetailsController extends NavigationController implements Init
         model.setTradeId(trade.getId());
         model.setPeerNetworkAddress(model.getPeerProfile().getAddressByTransportDisplayString(50));
 
-        Optional<String> paymentAccountData = trade.getPaymentAccountData();
+        Optional<String> paymentAccountData = snapshot.paymentAccountData();
         model.setPaymentAccountDataEmpty(paymentAccountData.isEmpty());
         model.setAssignedMediator(model.getMediator().map(UserProfile::getUserName).orElse(""));
         model.setHasMediatorBeenAssigned(model.getMediator().isPresent());
@@ -123,12 +124,12 @@ public class TradeDetailsController extends NavigationController implements Init
         model.setPaymentAccountData(paymentAccountData
                 .orElseGet(() -> Res.get("bisqEasy.openTrades.tradeDetails.dataNotYetProvided")));
 
-        Optional<String> bitcoinPaymentData = trade.getBitcoinPaymentData();
+        Optional<String> bitcoinPaymentData = snapshot.bitcoinPaymentData();
         model.setBtcPaymentAddress(bitcoinPaymentData
                 .orElseGet(() -> Res.get("bisqEasy.openTrades.tradeDetails.dataNotYetProvided")));
         model.setBtcPaymentDataEmpty(bitcoinPaymentData.isEmpty());
 
-        Optional<String> paymentProof = trade.getPaymentProof();
+        Optional<String> paymentProof = snapshot.paymentProof();
         model.setPaymentProof(paymentProof
                 .orElseGet(() -> Res.get("bisqEasy.openTrades.tradeDetails.dataNotYetProvided")));
         model.setPaymentProofEmpty(paymentProof.isEmpty());

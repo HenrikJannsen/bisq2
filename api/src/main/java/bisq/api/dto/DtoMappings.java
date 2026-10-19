@@ -129,7 +129,7 @@ import bisq.security.keys.TorKeyPair;
 import bisq.security.pow.ProofOfWork;
 import bisq.settings.SettingsService;
 import bisq.trade.TradeRole;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeParty;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.trade.exceptions.TradeProtocolFailure;
@@ -1199,23 +1199,24 @@ public class DtoMappings {
         // Only fromBisq2Model is provided: this DTO is wire output (server → client) and the
         // mutable trade state is delivered via WebSocket updates, not reconstructed from the DTO.
 
-        public static BisqEasyTradeDto fromBisq2Model(BisqEasyTrade value) {
+        public static BisqEasyTradeDto fromBisq2Model(BisqEasyTradeReadModel value) {
+            var snapshot = value.getSnapshot();
             return new BisqEasyTradeDto(
                     BisqEasyContractMapping.fromBisq2Model(value.getContract()),
                     value.getId(),
                     TradeRoleMapping.fromBisq2Model(value.getTradeRole()),
-                    IdentityMapping.fromBisq2Model(value.getMyIdentity()),
-                    BisqEasyTradePartyMapping.fromBisq2Model(value.getTaker()),
-                    BisqEasyTradePartyMapping.fromBisq2Model(value.getMaker()),
-                    BisqEasyTradeStateMapping.fromBisq2Model(value.getTradeState()),
-                    value.getPaymentAccountData().orElse(null),
-                    value.getBitcoinPaymentData().orElse(null),
-                    value.getPaymentProof().orElse(null),
-                    RoleMapping.fromBisq2Model(value.getInterruptTradeInitiator().get()),
-                    value.getErrorMessage(),
-                    value.getErrorStackTrace(),
-                    value.getPeersErrorMessage(),
-                    value.getPeersErrorStackTrace()
+                    new IdentityDto(value.getMyIdentityTag(), NetworkIdMapping.fromBisq2Model(value.getMyNetworkId())),
+                    new BisqEasyTradePartyDto(NetworkIdMapping.fromBisq2Model(value.getTaker().getNetworkId())),
+                    new BisqEasyTradePartyDto(NetworkIdMapping.fromBisq2Model(value.getMaker().getNetworkId())),
+                    BisqEasyTradeStateMapping.fromBisq2Model(snapshot.tradeState()),
+                    snapshot.paymentAccountData().orElse(null),
+                    snapshot.bitcoinPaymentData().orElse(null),
+                    snapshot.paymentProof().orElse(null),
+                    RoleMapping.fromBisq2Model(snapshot.interruptTradeInitiator()),
+                    snapshot.errorMessage(),
+                    snapshot.errorStackTrace(),
+                    snapshot.peersErrorMessage(),
+                    snapshot.peersErrorStackTrace()
             );
         }
     }

@@ -28,12 +28,11 @@ import bisq.common.observable.collection.CollectionObserver;
 import bisq.common.util.StringUtils;
 import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.threading.UIThread;
-import bisq.desktop.common.utils.TradeExceptionHandler;
 import bisq.desktop.components.controls.WrappingText;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingAnimation;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingState;
 import bisq.i18n.Res;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Insets;
@@ -50,7 +49,7 @@ public class SellerStateLightning3b extends BaseState {
     private final Controller controller;
 
     public SellerStateLightning3b(ServiceProvider serviceProvider,
-                                  BisqEasyTrade bisqEasyTrade,
+                                  BisqEasyTradeReadModel bisqEasyTrade,
                                   BisqEasyOpenTradeChannel channel) {
         controller = new Controller(serviceProvider, bisqEasyTrade, channel);
     }
@@ -63,13 +62,13 @@ public class SellerStateLightning3b extends BaseState {
         private Pin channelPin, chatMessagesPin;
 
         private Controller(ServiceProvider serviceProvider,
-                           BisqEasyTrade bisqEasyTrade,
+                           BisqEasyTradeReadModel bisqEasyTrade,
                            BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -147,7 +146,7 @@ public class SellerStateLightning3b extends BaseState {
         private void onButtonClicked() {
             // todo should we send a system message? if so we should change the text
             //sendTradeLogMessage(Res.get("bisqEasy.tradeState.info.phase3b.tradeLogMessage", model.getChannel().getMyUserIdentity().getUserName()));
-            TradeExceptionHandler.run(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()));
+            runTradeAction(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()));
         }
 
         private String getEncodedWithNickName(BisqEasyOpenTradeChannel bisqEasyOpenTradeChannel) {
@@ -160,7 +159,7 @@ public class SellerStateLightning3b extends BaseState {
     private static class Model extends BaseState.Model {
         private final StringProperty buyerHasConfirmedBitcoinReceipt = new SimpleStringProperty();
 
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

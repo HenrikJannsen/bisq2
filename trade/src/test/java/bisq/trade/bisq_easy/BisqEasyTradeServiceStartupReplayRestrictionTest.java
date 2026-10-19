@@ -27,6 +27,7 @@ import bisq.network.identity.NetworkId;
 import bisq.network.p2p.services.confidential.ConfidentialMessageService;
 import bisq.trade.ServiceProvider;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTradeMessage;
+import bisq.trade.bisq_easy.protocol.messages.BisqEasyConfirmFiatReceiptMessage;
 import bisq.user.banned.BannedUserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,10 +65,9 @@ class BisqEasyTradeServiceStartupReplayRestrictionTest {
         bannedUserService = mock(BannedUserService.class);
         when(serviceProvider.getUserService().getBannedUserService()).thenReturn(bannedUserService);
 
-        NetworkId sender = mock(NetworkId.class);
-        replayedMessage = mock(BisqEasyTradeMessage.class);
-        when(replayedMessage.getTradeId()).thenReturn("tradeId");
-        when(replayedMessage.getSender()).thenReturn(sender);
+        NetworkId sender = BisqEasyTradeTestData.identity("sender").getNetworkId();
+        replayedMessage = new BisqEasyConfirmFiatReceiptMessage("replayed-message", "tradeId", "1.0.0", sender,
+                BisqEasyTradeTestData.identity("receiver").getNetworkId());
         // The subscription replays the processed messages to the new listener before it returns
         NetworkService networkService = serviceProvider.getNetworkService();
         doAnswer(invocation -> {
@@ -75,19 +75,19 @@ class BisqEasyTradeServiceStartupReplayRestrictionTest {
             return null;
         }).when(networkService).subscribeToConfidentialMessages(any());
 
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
     }
 
     @AfterEach
     void tearDown() {
-        service.shutdown();
+        service.shutdown().join();
     }
 
     @Test
     void replayedTradeMessageIsIgnoredDuringAStoredHaltOfTrading() {
         alerts.add(haltOfTrading());
 
-        service.initialize();
+        service.initialize().join();
 
         // The service checks the sender only after the trade restrictions
         verify(bannedUserService, never()).isUserProfileBanned(any(NetworkId.class));
@@ -95,7 +95,7 @@ class BisqEasyTradeServiceStartupReplayRestrictionTest {
 
     @Test
     void replayedTradeMessageIsProcessedWithoutRestriction() {
-        service.initialize();
+        service.initialize().join();
 
         verify(bannedUserService).isUserProfileBanned(replayedMessage.getSender());
     }

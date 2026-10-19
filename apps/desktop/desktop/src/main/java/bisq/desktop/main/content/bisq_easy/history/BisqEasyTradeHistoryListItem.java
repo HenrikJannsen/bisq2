@@ -29,9 +29,9 @@ import bisq.offer.price.spec.PriceSpec;
 import bisq.offer.price.spec.PriceSpecFormatter;
 import bisq.presentation.formatters.DateFormatter;
 import bisq.presentation.formatters.PriceFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeFormatter;
-import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
+import bisq.trade.bisq_easy.BisqEasyClosedTradeReadModel;
 import bisq.user.profile.UserProfile;
 import bisq.user.reputation.ReputationScore;
 import bisq.user.reputation.ReputationService;
@@ -44,7 +44,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class BisqEasyTradeHistoryListItem implements DateTableItem {
     @EqualsAndHashCode.Include
-    private final BisqEasyTrade trade;
+    private final BisqEasyTradeReadModel trade;
     private final String myUserName, directionalTitle, peersUserName, tradeId, shortTradeId, dateString, timeString, dateTimeString,
             tradeCompletedDateString, baseAmountString, quoteAmountString, quoteAmountWithCodeString, priceString, priceWithCodeString,
             priceTooltip, pricePercentage, priceModality, myRole, paymentMethodAsString, offerType, receiverAddressOrInvoice, txIdOrPreimage;
@@ -56,22 +56,23 @@ public class BisqEasyTradeHistoryListItem implements DateTableItem {
     private final FiatPaymentMethod paymentMethod;
     private final BitcoinPaymentMethod settlementMethod;
 
-    public BisqEasyTradeHistoryListItem(BisqEasyClosedTrade closedTrade,
+    public BisqEasyTradeHistoryListItem(BisqEasyClosedTradeReadModel closedTrade,
                                         ReputationService reputationService) {
         this.trade = closedTrade.trade();
+        var snapshot = trade.getSnapshot();
         this.tradeId = trade.getId();
         shortTradeId = trade.getShortId();
         market = trade.getOffer().getMarket();
 
         BisqEasyContract contract = trade.getContract();
 
-        date = trade.getTradeCompletedDate().orElse(contract.getTakeOfferDate());
+        date = snapshot.tradeCompletedDate().orElse(contract.getTakeOfferDate());
         dateString = DateFormatter.formatDate(date);
         timeString = DateFormatter.formatTime(date);
         dateTimeString = String.format("%s %s", dateString, timeString);
 
         // btc confirmed
-        tradeCompletedDateString = trade.getTradeCompletedDate().map(DateFormatter::formatDate).orElse("N/A");
+        tradeCompletedDateString = snapshot.tradeCompletedDate().map(DateFormatter::formatDate).orElse("N/A");
 
         myUserProfile = closedTrade.myUserProfile();
         myUserName = myUserProfile.getUserName();
@@ -81,8 +82,8 @@ public class BisqEasyTradeHistoryListItem implements DateTableItem {
                 ? Res.get("bisqEasy.openTrades.csv.offerType.buy")
                 : Res.get("bisqEasy.openTrades.csv.offerType.sell");
 
-        receiverAddressOrInvoice = trade.getBitcoinPaymentData().orElseGet(() -> Res.get("data.na"));
-        txIdOrPreimage = trade.getPaymentProof().orElseGet(() -> Res.get("data.na"));
+        receiverAddressOrInvoice = snapshot.bitcoinPaymentData().orElseGet(() -> Res.get("data.na"));
+        txIdOrPreimage = snapshot.paymentProof().orElseGet(() -> Res.get("data.na"));
 
         peersUserProfile = closedTrade.peerUserProfile();
         peersUserName = peersUserProfile.getUserName();

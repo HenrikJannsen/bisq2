@@ -17,13 +17,11 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.common.network.Address;
 import bisq.common.network.AddressByTransportTypeMap;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.identity.Identity;
 import bisq.network.identity.NetworkId;
-import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.security.keys.KeyGeneration;
 import bisq.security.keys.PubKey;
 import bisq.trade.ServiceProvider;
@@ -50,7 +48,8 @@ import static org.mockito.Mockito.when;
  * apply the action.
  */
 class BisqEasyTradeServiceUserActionTest {
-    private final NetworkId me = networkId("me", 1001);
+    private final Identity myIdentity = BisqEasyTradeTestData.identity("me");
+    private final NetworkId me = myIdentity.getNetworkId();
     private final NetworkId peer = networkId("peer", 1002);
 
     private BisqEasyTradeService service;
@@ -58,13 +57,12 @@ class BisqEasyTradeServiceUserActionTest {
 
     @BeforeEach
     void setUp() {
-        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(mock(ServiceProvider.class, RETURNS_DEEP_STUBS));
         // I am the taker and the buyer. The peer is the maker.
-        BisqEasyContract contract = mock(BisqEasyContract.class);
-        when(contract.getTakeOfferDate()).thenReturn(0L);
-        BisqEasyOffer offer = mock(BisqEasyOffer.class);
-        when(offer.getId()).thenReturn("offerId");
-        trade = new BisqEasyTrade(contract, true, true, mock(Identity.class), offer, me, peer);
+        BisqEasyContract contract = BisqEasyTradeTestData.contract(
+                BisqEasyTradeTestData.offer("offerId", peer, BisqEasyTradeTestData.QUOTE_AMOUNT), me,
+                java.util.Optional.empty());
+        trade = BisqEasyTradeTestData.buyerAsTakerTrade(contract, myIdentity);
     }
 
     @AfterEach
@@ -74,8 +72,8 @@ class BisqEasyTradeServiceUserActionTest {
 
     @Test
     void actionWithoutProtocolIsNotApplied() {
-        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress"))
-                .isInstanceOf(TradeActionNotAppliedException.class);
+        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(handle(), "bc1qaddress").join())
+                .hasCauseInstanceOf(TradeActionNotAppliedException.class);
     }
 
     @Test
@@ -83,25 +81,31 @@ class BisqEasyTradeServiceUserActionTest {
         startServiceWithTrade();
         service.onMessage(new BisqEasyReportErrorMessage("error-of-peer", trade.getId(), "1.0.0", peer, me,
                 "error", "", TradeProtocolFailure.UNKNOWN));
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
 
-        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress"))
-                .isInstanceOf(TradeActionNotAppliedException.class);
-        assertThatThrownBy(() -> service.buyerConfirmFiatSent(trade))
-                .isInstanceOf(TradeActionNotAppliedException.class);
+        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(handle(), "bc1qaddress").join())
+                .hasCauseInstanceOf(TradeActionNotAppliedException.class);
+        assertThatThrownBy(() -> service.buyerConfirmFiatSent(handle()).join())
+                .hasCauseInstanceOf(TradeActionNotAppliedException.class);
     }
 
     @Test
     void actionOfAnActiveTradeIsNotRefused() {
         startServiceWithTrade();
 
-        assertThatCode(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress")).doesNotThrowAnyException();
+        assertThatCode(() -> service.buyerSendBitcoinPaymentData(handle(), "bc1qaddress").join()).doesNotThrowAnyException();
+    }
+
+    private BisqEasyTradeReadModel handle() {
+        return service.findTrade(trade.getId()).orElseGet(() -> new BisqEasyTradeReadModel(trade));
     }
 
     private void startServiceWithTrade() {
+        service.flush().join();
         service.getPersistableStore().addTrade(trade);
         service.initialize().join();
-        assertThat(service.findProtocol(trade.getId())).isPresent();
+        assertThat(service.findTrade(trade.getId())).isPresent();
     }
 
     private static NetworkId networkId(String keyId, int port) {

@@ -26,7 +26,6 @@ import bisq.desktop.ServiceProvider;
 import bisq.desktop.common.Browser;
 import bisq.desktop.common.utils.ClipboardUtil;
 import bisq.desktop.common.view.Navigation;
-import bisq.desktop.components.overlay.Popup;
 import bisq.desktop.main.content.bisq_easy.open_trades.trade_details.TradeDetailsController;
 import bisq.desktop.main.content.bisq_easy.TradesUtils;
 import bisq.desktop.main.content.components.UserProfileDisplay;
@@ -35,8 +34,7 @@ import bisq.i18n.Res;
 import bisq.presentation.formatters.DateFormatter;
 import bisq.presentation.formatters.PriceFormatter;
 import bisq.presentation.formatters.TimeFormatter;
-import bisq.settings.DontShowAgainService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.user.profile.UserProfile;
 import bisq.user.reputation.ReputationScore;
 import bisq.user.reputation.ReputationService;
@@ -55,25 +53,27 @@ import java.util.Optional;
 public abstract class State4<C extends State4.Controller<?, ?>> extends BaseState {
     protected final C controller;
 
-    public State4(ServiceProvider serviceProvider, BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
-        controller = getController(serviceProvider, bisqEasyTrade, channel);
+    public State4(ServiceProvider serviceProvider, BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel, Runnable archiveTradeHandler) {
+        controller = getController(serviceProvider, bisqEasyTrade, channel, archiveTradeHandler);
     }
 
     protected abstract C getController(ServiceProvider serviceProvider,
-                                       BisqEasyTrade bisqEasyTrade,
-                                       BisqEasyOpenTradeChannel channel);
+                                       BisqEasyTradeReadModel bisqEasyTrade,
+                                       BisqEasyOpenTradeChannel channel,
+                                       Runnable archiveTradeHandler);
 
     protected static abstract class Controller<M extends State4.Model, V extends State4.View<?, ?>> extends BaseState.Controller<M, V> {
         private final ReputationService reputationService;
         protected final ExplorerService explorerService;
-        private final DontShowAgainService dontShowAgainService;
+        private final Runnable archiveTradeHandler;
 
         protected Controller(ServiceProvider serviceProvider,
-                             BisqEasyTrade bisqEasyTrade,
-                             BisqEasyOpenTradeChannel channel) {
+                             BisqEasyTradeReadModel bisqEasyTrade,
+                             BisqEasyOpenTradeChannel channel,
+                             Runnable archiveTradeHandler) {
             super(serviceProvider, bisqEasyTrade, channel);
 
-            dontShowAgainService = serviceProvider.getDontShowAgainService();
+            this.archiveTradeHandler = archiveTradeHandler;
 
             explorerService = serviceProvider.getBondedRolesService().getExplorerService();
             reputationService = serviceProvider.getUserService().getReputationService();
@@ -83,13 +83,14 @@ public abstract class State4<C extends State4.Controller<?, ?>> extends BaseStat
         public void onActivate() {
             super.onActivate();
 
-            BisqEasyTrade bisqEasyTrade = model.getTrade();
+            BisqEasyTradeReadModel bisqEasyTrade = model.getTrade();
+            var snapshot = bisqEasyTrade.getSnapshot();
             BisqEasyContract contract = bisqEasyTrade.getContract();
             BitcoinPaymentRail paymentRail = contract.getBaseSidePaymentMethodSpec().getPaymentMethod().getPaymentRail();
             String name = paymentRail.name();
             model.setPaymentProofDescription(Res.get("bisqEasy.tradeState.paymentProof." + name));
             model.setBlockExplorerLinkVisible(paymentRail.equals(BitcoinPaymentRail.MAIN_CHAIN));
-            Optional<String> paymentProof = bisqEasyTrade.getPaymentProof();
+            Optional<String> paymentProof = snapshot.paymentProof();
             model.setPaymentProof(paymentProof.orElse(null));
             model.setPaymentProofVisible(paymentProof.isPresent());
             UserProfile tradePeer = model.getChannel().getPeer();
@@ -101,7 +102,7 @@ public abstract class State4<C extends State4.Controller<?, ?>> extends BaseStat
             long takeOfferDate = contract.getTakeOfferDate();
             model.setTradeDate(DateFormatter.formatDateTime(takeOfferDate));
 
-            String tradeDuration = bisqEasyTrade.getTradeCompletedDate()
+            String tradeDuration = snapshot.tradeCompletedDate()
                     .map(tradeCompletedDate -> tradeCompletedDate - takeOfferDate)
                     .map(TimeFormatter::formatAge)
                     .orElse("");
@@ -118,30 +119,7 @@ public abstract class State4<C extends State4.Controller<?, ?>> extends BaseStat
         }
 
         protected void onArchiveTrade() {
-            String key = "archiveTradeInfo";
-            if (dontShowAgainService.showAgain(key)) {
-                new Popup()
-                        .headline(Res.get("popup.headline.information"))
-                        .backgroundInfo(Res.get("bisqEasy.openTrades.closeTrade.info"))
-                        .actionButtonText(Res.get("bisqEasy.openTrades.closeTrade.info.actionButton"))
-                        .onAction(this::doArchiveTrade)
-                        .closeButtonText(Res.get("action.cancel"))
-                        .dontShowAgainId(key)
-                        .show();
-            } else {
-                doArchiveTrade();
-            }
-        }
-
-        private void doArchiveTrade() {
-            BisqEasyOpenTradeChannel channel = model.getChannel();
-            bisqEasyTradeService.closeTrade(model.getTrade(), channel.getMyUserIdentity().getUserProfile(), channel.getPeer());
-            leavePrivateChatManager.leaveChannel(channel);
-            goToTradeHistory();
-        }
-
-        private void goToTradeHistory() {
-            Navigation.navigateTo(NavigationTarget.BISQ_EASY_HISTORY);
+            archiveTradeHandler.run();
         }
 
         protected void onShowDetails() {
@@ -196,7 +174,7 @@ public abstract class State4<C extends State4.Controller<?, ?>> extends BaseStat
         protected Optional<String> txId = Optional.empty();
         protected ReputationScore tradePeerReputationScore;
 
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

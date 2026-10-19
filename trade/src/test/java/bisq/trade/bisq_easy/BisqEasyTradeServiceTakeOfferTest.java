@@ -19,14 +19,12 @@ package bisq.trade.bisq_easy;
 
 import bisq.bonded_roles.market_price.MarketPrice;
 import bisq.bonded_roles.market_price.MarketPriceProviderInfo;
-import bisq.bonded_roles.release.AppType;
 import bisq.common.monetary.Coin;
 import bisq.common.monetary.Fiat;
 import bisq.common.monetary.PriceQuote;
 import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.offer.price.spec.FloatPriceSpec;
 import bisq.trade.ServiceProvider;
-import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.user.reputation.ReputationScore;
 import org.junit.jupiter.api.Test;
 
@@ -50,7 +48,7 @@ class BisqEasyTradeServiceTakeOfferTest {
     @Test
     void takersContractCarriesThePriceSpecOfTheOffer() {
         ServiceProvider serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
-        BisqEasyTradeService service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        BisqEasyTradeService service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
         FloatPriceSpec priceSpec = new FloatPriceSpec(0.02);
         BisqEasyOffer offer = offer("offer-id", identity("maker").getNetworkId(), QUOTE_AMOUNT, priceSpec);
         // The taker buys, so its node checks the reputation of the seller (bisq-easy-seller-reputation-limit.md)
@@ -62,15 +60,16 @@ class BisqEasyTradeServiceTakeOfferTest {
         when(serviceProvider.getUserService().getReputationService().getReputationScore(offer.getMakersUserProfileId()))
                 .thenReturn(new ReputationScore(1_000_000, 5, 1));
 
-        BisqEasyProtocol protocol = service.takerCreatesProtocol(identity("taker"),
+        BisqEasyTradeReadModel trade = service.takerCreatesTrade(identity("taker"),
                 offer,
                 Coin.asBtcFromValue(BASE_AMOUNT),
                 Fiat.fromValue(QUOTE_AMOUNT, "USD"),
                 offer.getBaseSidePaymentMethodSpecs().get(0),
                 offer.getQuoteSidePaymentMethodSpecs().get(0),
                 Optional.empty(),
-                60_000_0000);
+                60_000_0000).join();
 
-        assertEquals(priceSpec, protocol.getModel().getContract().getPriceSpec());
+        assertEquals(priceSpec, trade.getContract().getPriceSpec());
+        service.shutdown().join();
     }
 }

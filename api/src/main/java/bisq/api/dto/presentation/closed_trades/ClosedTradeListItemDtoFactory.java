@@ -24,9 +24,9 @@ import bisq.api.dto.trade.bisq_easy.protocol.BisqEasyTradeStateDto;
 import bisq.api.dto.user.profile.UserProfileDto;
 import bisq.api.dto.user.reputation.ReputationScoreDto;
 import bisq.contract.bisq_easy.BisqEasyContract;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeFormatter;
-import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
+import bisq.trade.bisq_easy.BisqEasyClosedTradeReadModel;
 import bisq.user.profile.UserProfile;
 import bisq.user.reputation.ReputationScore;
 import bisq.user.reputation.ReputationService;
@@ -37,15 +37,16 @@ public final class ClosedTradeListItemDtoFactory {
     private ClosedTradeListItemDtoFactory() {
     }
 
-    public static ClosedTradeIndexedItem create(BisqEasyClosedTrade closedTrade,
+    public static ClosedTradeIndexedItem create(BisqEasyClosedTradeReadModel closedTrade,
                                                 ReputationService reputationService) {
-        BisqEasyTrade trade = closedTrade.trade();
+        BisqEasyTradeReadModel trade = closedTrade.trade();
+        var snapshot = trade.getSnapshot();
         BisqEasyContract contract = trade.getContract();
         UserProfile myUserProfile = closedTrade.myUserProfile();
         UserProfile peersUserProfile = closedTrade.peerUserProfile();
 
         TradeRoleDto tradeRoleDto = DtoMappings.TradeRoleMapping.fromBisq2Model(trade.getTradeRole());
-        BisqEasyTradeStateDto tradeStateDto = DtoMappings.BisqEasyTradeStateMapping.fromBisq2Model(trade.getTradeState());
+        BisqEasyTradeStateDto tradeStateDto = DtoMappings.BisqEasyTradeStateMapping.fromBisq2Model(snapshot.tradeState());
 
         UserProfileDto myUserProfileDto = DtoMappings.UserProfileMapping.fromBisq2Model(myUserProfile);
         UserProfileDto peersUserProfileDto = DtoMappings.UserProfileMapping.fromBisq2Model(peersUserProfile);
@@ -81,10 +82,10 @@ public final class ClosedTradeListItemDtoFactory {
                 bitcoinSettlementMethod,
                 fiatPaymentMethod,
                 peersReputationScoreDto,
-                trade.getPaymentAccountData(),
-                trade.getBitcoinPaymentData(),
-                trade.getPaymentProof(),
-                trade.getTradeCompletedDate()
+                snapshot.paymentAccountData(),
+                snapshot.bitcoinPaymentData(),
+                snapshot.paymentProof(),
+                snapshot.tradeCompletedDate()
         );
 
         String market = trade.getOffer().getMarket().toString();

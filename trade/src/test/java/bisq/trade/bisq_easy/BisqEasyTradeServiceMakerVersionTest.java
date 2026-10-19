@@ -53,7 +53,7 @@ import static bisq.trade.bisq_easy.BisqEasyTradeTestData.offer;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static bisq.trade.bisq_easy.BisqEasyTradeServiceTestSupport.assertFutureFailure;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -100,14 +100,14 @@ class BisqEasyTradeServiceMakerVersionTest {
                 .thenReturn(Optional.of(usdMarketPrice));
         when(serviceProvider.getUserService().getReputationService().getReputationScore(any(String.class)))
                 .thenReturn(new ReputationScore(1_000_000, 5, 1));
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
-        service.initialize();
+        service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
+        service.initialize().join();
         offer = offer("offer-id", identity("maker").getNetworkId(), QUOTE_AMOUNT);
     }
 
     @AfterEach
     void tearDown() {
-        service.shutdown();
+        service.shutdown().join();
     }
 
     @Test
@@ -115,7 +115,7 @@ class BisqEasyTradeServiceMakerVersionTest {
         alerts.add(minVersionForTrading(REQUIRED_VERSION));
         makerProfileHasVersion("2.1.13");
 
-        TradeRestrictedException exception = assertThrows(TradeRestrictedException.class, this::take);
+        TradeRestrictedException exception = assertFutureFailure(TradeRestrictedException.class, this::take);
 
         assertEquals(TradeRestrictedException.Restriction.MAKER_VERSION_BELOW_MIN_REQUIRED, exception.getRestriction());
         assertEquals(Optional.of(REQUIRED_VERSION), exception.findMinRequiredVersion());
@@ -158,7 +158,7 @@ class BisqEasyTradeServiceMakerVersionTest {
         alerts.add(minVersionForTrading(REQUIRED_VERSION));
         makerProfileIsUnknown();
 
-        assertThrows(TradeRestrictedException.class, this::take);
+        assertFutureFailure(TradeRestrictedException.class, this::take);
     }
 
     @ParameterizedTest
@@ -167,7 +167,7 @@ class BisqEasyTradeServiceMakerVersionTest {
         alerts.add(minVersionForTrading(REQUIRED_VERSION));
         makerProfileHasVersion(version);
 
-        assertThrows(TradeRestrictedException.class, this::take);
+        assertFutureFailure(TradeRestrictedException.class, this::take);
     }
 
     @Test
@@ -178,14 +178,14 @@ class BisqEasyTradeServiceMakerVersionTest {
     }
 
     private void take() {
-        service.takerCreatesProtocol(identity("taker"),
+        service.takerCreatesTrade(identity("taker"),
                 offer,
                 Coin.asBtcFromValue(BASE_AMOUNT),
                 Fiat.fromValue(QUOTE_AMOUNT, "USD"),
                 offer.getBaseSidePaymentMethodSpecs().get(0),
                 offer.getQuoteSidePaymentMethodSpecs().get(0),
                 Optional.empty(),
-                60_000_0000);
+                60_000_0000).join();
     }
 
     private void offerWasCreatedByVersion(String appVersion) {

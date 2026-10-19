@@ -19,7 +19,7 @@ package bisq.desktop.main.content.bisq_easy.open_trades.trade_state.states;
 
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.desktop.ServiceProvider;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -27,16 +27,16 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BuyerState4 extends State4<BuyerState4.Controller> {
     public BuyerState4(ServiceProvider serviceProvider,
-                       BisqEasyTrade bisqEasyTrade,
-                       BisqEasyOpenTradeChannel channel) {
-        super(serviceProvider, bisqEasyTrade, channel);
+                       BisqEasyTradeReadModel bisqEasyTrade,
+                       BisqEasyOpenTradeChannel channel, Runnable archiveTradeHandler) {
+        super(serviceProvider, bisqEasyTrade, channel, archiveTradeHandler);
     }
 
     @Override
     protected Controller getController(ServiceProvider serviceProvider,
-                                       BisqEasyTrade bisqEasyTrade,
-                                       BisqEasyOpenTradeChannel channel) {
-        return new Controller(serviceProvider, bisqEasyTrade, channel);
+                                       BisqEasyTradeReadModel bisqEasyTrade,
+                                       BisqEasyOpenTradeChannel channel, Runnable archiveTradeHandler) {
+        return new Controller(serviceProvider, bisqEasyTrade, channel, archiveTradeHandler);
     }
 
     public View getView() {
@@ -45,13 +45,13 @@ public class BuyerState4 extends State4<BuyerState4.Controller> {
 
     protected static class Controller extends State4.Controller<Model, View> {
         protected Controller(ServiceProvider serviceProvider,
-                             BisqEasyTrade bisqEasyTrade,
-                             BisqEasyOpenTradeChannel channel) {
-            super(serviceProvider, bisqEasyTrade, channel);
+                             BisqEasyTradeReadModel bisqEasyTrade,
+                             BisqEasyOpenTradeChannel channel, Runnable archiveTradeHandler) {
+            super(serviceProvider, bisqEasyTrade, channel, archiveTradeHandler);
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -64,7 +64,7 @@ public class BuyerState4 extends State4<BuyerState4.Controller> {
     @Setter
     @Getter
     protected static class Model extends State4.Model {
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

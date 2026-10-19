@@ -17,13 +17,11 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.common.network.Address;
 import bisq.common.network.AddressByTransportTypeMap;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.identity.Identity;
 import bisq.network.identity.NetworkId;
-import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.security.keys.KeyGeneration;
 import bisq.security.keys.PubKey;
 import bisq.trade.ServiceProvider;
@@ -50,7 +48,8 @@ import static org.mockito.Mockito.when;
  * bound is exceeded, the oldest kept message is dropped.
  */
 class BisqEasyTradeServicePendingMessagesTest {
-    private final NetworkId me = networkId("me", 1001);
+    private final Identity myIdentity = BisqEasyTradeTestData.identity("me");
+    private final NetworkId me = myIdentity.getNetworkId();
     private final NetworkId peer = networkId("peer", 1002);
     private final NetworkId thirdParty = networkId("third-party", 1003);
 
@@ -61,13 +60,12 @@ class BisqEasyTradeServicePendingMessagesTest {
     @BeforeEach
     void setUp() {
         serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
         // I am the taker and the buyer. The peer is the maker.
-        BisqEasyContract contract = mock(BisqEasyContract.class);
-        when(contract.getTakeOfferDate()).thenReturn(0L);
-        BisqEasyOffer offer = mock(BisqEasyOffer.class);
-        when(offer.getId()).thenReturn("offerId");
-        trade = new BisqEasyTrade(contract, true, true, mock(Identity.class), offer, me, peer);
+        BisqEasyContract contract = BisqEasyTradeTestData.contract(
+                BisqEasyTradeTestData.offer("offerId", peer, BisqEasyTradeTestData.QUOTE_AMOUNT), me,
+                java.util.Optional.empty());
+        trade = BisqEasyTradeTestData.buyerAsTakerTrade(contract, myIdentity);
     }
 
     @AfterEach
@@ -83,8 +81,9 @@ class BisqEasyTradeServicePendingMessagesTest {
         startServiceWithTrade();
 
         // Startup now retries the durable pending messages after the protocols and restrictions are loaded.
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
-        assertThat(service.getPendingMessages().getMessagesInArrivalOrder()).doesNotContain(errorReport(peer));
+        assertThat(service.getPersistableStore().getPendingMessages().getMessagesInArrivalOrder()).doesNotContain(errorReport(peer));
     }
 
     @Test
@@ -98,28 +97,28 @@ class BisqEasyTradeServicePendingMessagesTest {
 
         // The error report was dropped, so it did not reach the protocol. The trade has no transition for the
         // confirmation message in its first state, so that message does not change the state either.
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
         assertThat(trade.getEventQueue()).doesNotContain(errorReport(peer));
     }
 
     @Test
     void processingAllowedRestoredMessageDoesNotBypassBanForAnotherPendingMessage() {
-        BisqEasyContract otherContract = mock(BisqEasyContract.class);
-        when(otherContract.getTakeOfferDate()).thenReturn(1L);
-        BisqEasyOffer otherOffer = mock(BisqEasyOffer.class);
-        when(otherOffer.getId()).thenReturn("other-offer");
-        BisqEasyTrade otherTrade = new BisqEasyTrade(otherContract, true, true, mock(Identity.class),
-                otherOffer, me, thirdParty);
+        BisqEasyContract otherContract = BisqEasyTradeTestData.contract(
+                BisqEasyTradeTestData.offer("other-offer", thirdParty, BisqEasyTradeTestData.QUOTE_AMOUNT), me,
+                java.util.Optional.empty());
+        BisqEasyTrade otherTrade = BisqEasyTradeTestData.buyerAsTakerTrade(otherContract, myIdentity);
         BisqEasyReportErrorMessage bannedPeersMessage = new BisqEasyReportErrorMessage("banned-peer-message",
                 otherTrade.getId(), "1.0.0", thirdParty, me, "error", "", TradeProtocolFailure.UNKNOWN);
         service.getPersistableStore().addTrade(trade);
         service.getPersistableStore().addTrade(otherTrade);
-        service.getPendingMessages().add(errorReport(peer));
-        service.getPendingMessages().add(bannedPeersMessage);
+        service.getPersistableStore().getPendingMessages().add(errorReport(peer));
+        service.getPersistableStore().getPendingMessages().add(bannedPeersMessage);
         when(serviceProvider.getUserService().getBannedUserService().isUserProfileBanned(thirdParty)).thenReturn(true);
 
         service.initialize().join();
 
+        service.flush().join();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
         assertThat(otherTrade.getState()).isEqualTo(BisqEasyTradeState.INIT);
         assertThat(otherTrade.getPeersErrorMessage()).isNull();
@@ -138,9 +137,10 @@ class BisqEasyTradeServicePendingMessagesTest {
     }
 
     private void startServiceWithTrade() {
+        service.flush().join();
         service.getPersistableStore().addTrade(trade);
         service.initialize().join();
-        assertThat(service.findProtocol(trade.getId())).isPresent();
+        assertThat(service.findTrade(trade.getId())).isPresent();
     }
 
     private BisqEasyConfirmFiatReceiptMessage confirmFiatReceipt() {

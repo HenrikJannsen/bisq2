@@ -19,7 +19,7 @@ package bisq.desktop.main.content.bisq_easy.open_trades.trade_details;
 
 import bisq.desktop.navigation.NavigationTarget;
 import bisq.desktop.common.view.NavigationModel;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.user.profile.UserProfile;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,7 +31,7 @@ import java.util.Optional;
 @Getter
 @Setter
 public class TradeDetailsModel extends NavigationModel {
-    private BisqEasyTrade trade;
+    private BisqEasyTradeReadModel trade;
     private UserProfile myUserProfile;
     private UserProfile peerProfile;
     private Optional<UserProfile> mediator;

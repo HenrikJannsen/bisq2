@@ -27,7 +27,6 @@ import bisq.account.protocol_type.TradeProtocolType;
 import bisq.bonded_roles.market_price.MarketPrice;
 import bisq.bonded_roles.market_price.MarketPriceProviderInfo;
 import bisq.bonded_roles.market_price.MarketPriceService;
-import bisq.bonded_roles.release.AppType;
 import bisq.common.market.MarketRepository;
 import bisq.common.monetary.Coin;
 import bisq.common.monetary.Fiat;
@@ -43,6 +42,7 @@ import bisq.trade.exceptions.TradeProtocolFailure;
 import bisq.user.reputation.ReputationScore;
 import bisq.user.reputation.ReputationService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -54,7 +54,7 @@ import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.offer;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static bisq.trade.bisq_easy.BisqEasyTradeServiceTestSupport.assertFutureFailure;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -83,7 +83,12 @@ class BisqEasyTradeServiceBuyerTakeReputationTest {
         reputationService = mock(ReputationService.class);
         when(reputationService.getReputationScore(any(String.class))).thenReturn(new ReputationScore(0, 0, 0));
         when(serviceProvider.getUserService().getReputationService()).thenReturn(reputationService);
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(serviceProvider);
+    }
+
+    @AfterEach
+    void tearDown() {
+        service.shutdown().join();
     }
 
     @Test
@@ -91,7 +96,7 @@ class BisqEasyTradeServiceBuyerTakeReputationTest {
         BisqEasyOffer sellOffer = offer("offer-id", identity("maker").getNetworkId(), QUOTE_AMOUNT);
         sellerHasScore(sellOffer, 1_000);
 
-        TradeProtocolException exception = assertThrows(TradeProtocolException.class, () -> take(sellOffer));
+        TradeProtocolException exception = assertFutureFailure(TradeProtocolException.class, () -> take(sellOffer));
 
         assertEquals(TradeProtocolFailure.SELLER_REPUTATION_TOO_LOW, exception.getTradeProtocolFailure());
         assertTrue(service.getTrades().isEmpty());
@@ -121,7 +126,7 @@ class BisqEasyTradeServiceBuyerTakeReputationTest {
         sellerHasScore(sellOffer, 20_000);
         when(marketPriceService.findMarketPrice(any())).thenReturn(Optional.empty());
 
-        assertThrows(MarketPriceNotCurrentException.class, () -> take(sellOffer));
+        assertFutureFailure(MarketPriceNotCurrentException.class, () -> take(sellOffer));
         assertTrue(service.getTrades().isEmpty());
     }
 
@@ -139,14 +144,14 @@ class BisqEasyTradeServiceBuyerTakeReputationTest {
     }
 
     private void take(BisqEasyOffer offer) {
-        service.takerCreatesProtocol(identity("taker"),
+        service.takerCreatesTrade(identity("taker"),
                 offer,
                 Coin.asBtcFromValue(BASE_AMOUNT),
                 Fiat.fromValue(QUOTE_AMOUNT, "USD"),
                 offer.getBaseSidePaymentMethodSpecs().get(0),
                 offer.getQuoteSidePaymentMethodSpecs().get(0),
                 Optional.empty(),
-                100_000_0000);
+                100_000_0000).join();
     }
 
     private static BisqEasyOffer buyOffer() {

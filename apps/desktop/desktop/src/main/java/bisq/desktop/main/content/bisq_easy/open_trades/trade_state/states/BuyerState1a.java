@@ -43,7 +43,7 @@ import bisq.desktop.navigation.NavigationTarget;
 import bisq.desktop.webcam.WebcamAppModel;
 import bisq.desktop.webcam.WebcamAppService;
 import bisq.i18n.Res;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
@@ -76,7 +76,7 @@ public class BuyerState1a extends BaseState {
     private final Controller controller;
 
     public BuyerState1a(ServiceProvider serviceProvider,
-                        BisqEasyTrade bisqEasyTrade,
+                        BisqEasyTradeReadModel bisqEasyTrade,
                         BisqEasyOpenTradeChannel channel) {
         controller = new Controller(serviceProvider, bisqEasyTrade, channel);
     }
@@ -90,14 +90,14 @@ public class BuyerState1a extends BaseState {
         private Pin qrCodePin, imageRecognizedPin, webcamAppErrorMessagePin, localExceptionPin, webcamAppStatePin, restartSignalReceivedPin;
 
         private Controller(ServiceProvider serviceProvider,
-                           BisqEasyTrade bisqEasyTrade,
+                           BisqEasyTradeReadModel bisqEasyTrade,
                            BisqEasyOpenTradeChannel channel) {
             super(serviceProvider, bisqEasyTrade, channel);
             webcamAppService = serviceProvider.getWebcamAppService();
         }
 
         @Override
-        protected Model createModel(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model createModel(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             return new Model(bisqEasyTrade, channel);
         }
 
@@ -311,7 +311,7 @@ public class BuyerState1a extends BaseState {
         private final StringProperty webcamStateIconId = new SimpleStringProperty();
         private final StringProperty webcamStateInfo = new SimpleStringProperty();
 
-        protected Model(BisqEasyTrade bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
+        protected Model(BisqEasyTradeReadModel bisqEasyTrade, BisqEasyOpenTradeChannel channel) {
             super(bisqEasyTrade, channel);
         }
     }

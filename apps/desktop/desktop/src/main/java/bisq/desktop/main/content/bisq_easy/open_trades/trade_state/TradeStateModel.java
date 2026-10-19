@@ -20,7 +20,7 @@ package bisq.desktop.main.content.bisq_easy.open_trades.trade_state;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.desktop.common.view.Model;
 import bisq.network.p2p.services.confidential.ack.MessageDeliveryStatus;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import javafx.beans.property.*;
 import javafx.scene.layout.VBox;
 import lombok.Getter;
@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Getter
 public class TradeStateModel implements Model {
+    private final BooleanProperty actionPending = new SimpleBooleanProperty();
     enum TradeCloseType {
         REJECT,
         CANCEL,
@@ -39,7 +40,7 @@ public class TradeStateModel implements Model {
     @Setter
     private TradeCloseType tradeCloseType;
     private final ObjectProperty<BisqEasyOpenTradeChannel> channel = new SimpleObjectProperty<>();
-    private final ObjectProperty<BisqEasyTrade> bisqEasyTrade = new SimpleObjectProperty<>();
+    private final ObjectProperty<BisqEasyTradeReadModel> bisqEasyTrade = new SimpleObjectProperty<>();
     private final ObjectProperty<VBox> stateInfoVBox = new SimpleObjectProperty<>();
     private final StringProperty interruptTradeButtonText = new SimpleStringProperty();
     private final BooleanProperty interruptTradeButtonVisible = new SimpleBooleanProperty(true);

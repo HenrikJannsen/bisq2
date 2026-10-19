@@ -17,13 +17,11 @@
 
 package bisq.trade.bisq_easy;
 
-import bisq.bonded_roles.release.AppType;
 import bisq.common.network.Address;
 import bisq.common.network.AddressByTransportTypeMap;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.identity.Identity;
 import bisq.network.identity.NetworkId;
-import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.security.keys.KeyGeneration;
 import bisq.security.keys.PubKey;
 import bisq.trade.ServiceProvider;
@@ -66,7 +64,8 @@ class BisqEasyTradeServiceLoggingTest {
     private final Logger pendingMessagesLogger = (Logger) LoggerFactory.getLogger(PendingTradeMessages.class);
     private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
 
-    private final NetworkId me = networkId("me", 1001);
+    private final Identity myIdentity = BisqEasyTradeTestData.identity("me");
+    private final NetworkId me = myIdentity.getNetworkId();
     private final NetworkId peer = networkId("peer", 1002);
     private final NetworkId thirdParty = networkId("third-party", 1003);
 
@@ -79,13 +78,12 @@ class BisqEasyTradeServiceLoggingTest {
         serviceLogger.addAppender(appender);
         pendingMessagesLogger.addAppender(appender);
 
-        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+        service = BisqEasyTradeServiceTestSupport.service(mock(ServiceProvider.class, RETURNS_DEEP_STUBS));
         // I am the taker and the buyer. The peer is the maker and the seller.
-        BisqEasyContract contract = mock(BisqEasyContract.class);
-        when(contract.getTakeOfferDate()).thenReturn(0L);
-        BisqEasyOffer offer = mock(BisqEasyOffer.class);
-        when(offer.getId()).thenReturn("offerId");
-        trade = new BisqEasyTrade(contract, true, true, mock(Identity.class), offer, me, peer);
+        BisqEasyContract contract = BisqEasyTradeTestData.contract(
+                BisqEasyTradeTestData.offer("offerId", peer, BisqEasyTradeTestData.QUOTE_AMOUNT), me,
+                java.util.Optional.empty());
+        trade = BisqEasyTradeTestData.buyerAsTakerTrade(contract, myIdentity);
     }
 
     @AfterEach
@@ -103,8 +101,10 @@ class BisqEasyTradeServiceLoggingTest {
         service.onMessage(accountDataMessage());
         startServiceWithTrade();
         service.onMessage(new BisqEasyConfirmFiatReceiptMessage("message-of-peer", trade.getId(), "1.0.0", peer, me));
+        service.flush().join();
         assertThat(trade.getEventQueue()).contains(accountDataMessage());
 
+        service.flush().join();
         assertThat(loggedLines()).anyMatch(line -> line.contains("add the message of type BisqEasyAccountDataMessage"));
         assertThat(loggedLines()).anyMatch(line -> line.contains("remove the message of type BisqEasyAccountDataMessage"));
         assertThat(loggedLines()).noneMatch(line -> line.contains(PAYMENT_ACCOUNT_DATA));
@@ -123,11 +123,13 @@ class BisqEasyTradeServiceLoggingTest {
                         "",
                         TradeProtocolFailure.UNKNOWN)));
 
+        service.flush().join();
         List<ILoggingEvent> warnings = appender.list.stream().filter(event -> event.getLevel() == Level.WARN).toList();
         assertThat(warnings).hasSize(1);
         assertThat(warnings.get(0).getFormattedMessage())
                 .contains("type=BisqEasyAccountDataMessage")
                 .contains("tradeId=" + trade.getId());
+        service.flush().join();
         assertThat(loggedLines()).noneMatch(line -> line.contains(PAYMENT_ACCOUNT_DATA));
     }
 
@@ -146,9 +148,10 @@ class BisqEasyTradeServiceLoggingTest {
     }
 
     private void startServiceWithTrade() {
+        service.flush().join();
         service.getPersistableStore().addTrade(trade);
         service.initialize().join();
-        assertThat(service.findProtocol(trade.getId())).isPresent();
+        assertThat(service.findTrade(trade.getId())).isPresent();
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
     }
 

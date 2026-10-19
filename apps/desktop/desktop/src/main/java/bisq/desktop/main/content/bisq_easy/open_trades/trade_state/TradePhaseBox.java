@@ -34,7 +34,7 @@ import bisq.desktop.components.controls.Badge;
 import bisq.desktop.components.controls.BisqMenuItem;
 import bisq.i18n.Res;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.user.banned.BannedUserService;
 import javafx.beans.property.*;
@@ -71,7 +71,7 @@ class TradePhaseBox {
         controller.setSelectedChannel(channel);
     }
 
-    void setBisqEasyTrade(BisqEasyTrade bisqEasyTrade) {
+    void setBisqEasyTrade(BisqEasyTradeReadModel bisqEasyTrade) {
         controller.setBisqEasyTrade(bisqEasyTrade);
     }
 
@@ -112,7 +112,7 @@ class TradePhaseBox {
             }
         }
 
-        private void setBisqEasyTrade(BisqEasyTrade bisqEasyTrade) {
+        private void setBisqEasyTrade(BisqEasyTradeReadModel bisqEasyTrade) {
             model.setBisqEasyTrade(bisqEasyTrade);
             unbindTradeState();
             if (bisqEasyTrade == null) {
@@ -254,7 +254,7 @@ class TradePhaseBox {
         @Setter
         private BisqEasyOpenTradeChannel selectedChannel;
         @Setter
-        private BisqEasyTrade bisqEasyTrade;
+        private BisqEasyTradeReadModel bisqEasyTrade;
         private final BooleanProperty requestMediationButtonVisible = new SimpleBooleanProperty();
         private final BooleanProperty reportToMediatorButtonVisible = new SimpleBooleanProperty();
         private final BooleanProperty isInMediation = new SimpleBooleanProperty();

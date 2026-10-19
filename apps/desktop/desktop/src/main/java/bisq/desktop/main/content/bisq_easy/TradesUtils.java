@@ -33,7 +33,7 @@ import bisq.presentation.formatters.AmountFormatter;
 import bisq.presentation.formatters.DateFormatter;
 import bisq.presentation.formatters.PriceFormatter;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.user.banned.BannedUserService;
 import bisq.user.profile.UserProfile;
 import javafx.scene.Scene;
@@ -46,9 +46,10 @@ import java.util.Optional;
 @Slf4j
 public class TradesUtils {
 
-    public static void exportTrade(BisqEasyTrade trade, Scene scene) {
+    public static void exportTrade(BisqEasyTradeReadModel trade, Scene scene) {
         try {
             BisqEasyContract contract = trade.getContract();
+            var snapshot = trade.getSnapshot();
             String tradeId = trade.getId();
             String role = trade.isMaker() ?
                     Res.get("bisqEasy.openTrades.table.makerTakerRole.maker") :
@@ -67,12 +68,12 @@ public class TradesUtils {
             String price = PriceFormatter.format(contract.getPriceQuote());
             String pricePercentage = PriceSpecFormatter.getFormattedPriceAsPercentage(trade.getPriceQuote(),
                     priceSpec, contract.getMarketPrice(), trade.getOffer().getMarket());
-            String paymentProof = trade.getPaymentProof().orElseGet(() -> Res.get("data.na"));
-            String bitcoinPaymentData = trade.getBitcoinPaymentData().orElseGet(() -> Res.get("data.na"));
+            String paymentProof = snapshot.paymentProof().orElseGet(() -> Res.get("data.na"));
+            String bitcoinPaymentData = snapshot.bitcoinPaymentData().orElseGet(() -> Res.get("data.na"));
             String bitcoinMethod = contract.getBaseSidePaymentMethodSpec().getDisplayString();
             String fiatMethod = contract.getQuoteSidePaymentMethodSpec().getDisplayString();
             String paymentMethod = String.format("%s / %s", fiatMethod, bitcoinMethod);
-            Long date = trade.getTradeCompletedDate().orElse(contract.getTakeOfferDate());
+            Long date = snapshot.tradeCompletedDate().orElse(contract.getTakeOfferDate());
             String formattedDate = DateFormatter.formatDateTime(date);
             List<String> headers = List.of(
                     Res.get("bisqEasy.openTrades.table.tradeId").toUpperCase(),

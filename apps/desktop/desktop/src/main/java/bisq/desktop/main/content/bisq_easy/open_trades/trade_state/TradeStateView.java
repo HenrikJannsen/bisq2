@@ -128,6 +128,7 @@ public class TradeStateView extends View<VBox, TradeStateModel, TradeStateContro
 
     @Override
     protected void onViewAttached() {
+        root.disableProperty().bind(model.getActionPending());
         tradePhaseBox.visibleProperty().bind(model.getIsTradeCompleted().not());
         tradePhaseBox.managedProperty().bind(model.getIsTradeCompleted().not());
         tradeDetailsHeaderButton.visibleProperty().bind(model.getShouldShowTradeDetailsHeaderButton());
@@ -200,6 +201,7 @@ public class TradeStateView extends View<VBox, TradeStateModel, TradeStateContro
 
     @Override
     protected void onViewDetached() {
+        root.disableProperty().unbind();
         tradePhaseBox.visibleProperty().unbind();
         tradePhaseBox.managedProperty().unbind();
         tradeDetailsHeaderButton.visibleProperty().unbind();

@@ -28,7 +28,7 @@ import bisq.desktop.components.controls.BitcoinAmountDisplay;
 import bisq.desktop.main.content.components.UserProfileDisplay;
 import bisq.i18n.Res;
 import bisq.presentation.formatters.AmountFormatter;
-import bisq.trade.bisq_easy.BisqEasyTrade;
+import bisq.trade.bisq_easy.BisqEasyTradeReadModel;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.user.identity.UserIdentityService;
 import bisq.user.profile.UserProfile;
@@ -100,12 +100,12 @@ public class TradeDataHeader {
                 if (channel == null) {
                     return;
                 }
-                Optional<BisqEasyTrade> optionalBisqEasyTrade = bisqEasyTradeService.findTrade(channel.getTradeId());
+                Optional<BisqEasyTradeReadModel> optionalBisqEasyTrade = bisqEasyTradeService.findTrade(channel.getTradeId());
                 if (optionalBisqEasyTrade.isEmpty()) {
                     return;
                 }
 
-                BisqEasyTrade bisqEasyTrade = optionalBisqEasyTrade.get();
+                BisqEasyTradeReadModel bisqEasyTrade = optionalBisqEasyTrade.get();
                 model.getBisqEasyTrade().set(bisqEasyTrade);
 
                 UserProfile peerUserProfile = channel.getPeer();
@@ -151,7 +151,7 @@ public class TradeDataHeader {
         private final String peerDescription;
 
         private final ObjectProperty<BisqEasyOpenTradeChannel> channel = new SimpleObjectProperty<>();
-        private final ObjectProperty<BisqEasyTrade> bisqEasyTrade = new SimpleObjectProperty<>();
+        private final ObjectProperty<BisqEasyTradeReadModel> bisqEasyTrade = new SimpleObjectProperty<>();
         private final ObjectProperty<UserProfile> peersUserProfile = new SimpleObjectProperty<>();
         private final ObjectProperty<ReputationScore> reputationScore = new SimpleObjectProperty<>();
         private final StringProperty direction = new SimpleStringProperty();

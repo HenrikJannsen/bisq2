@@ -54,13 +54,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadInfo;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -83,7 +82,6 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -126,6 +124,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         when(serviceProvider.getSettingsService().getCloseMyOfferWhenTaken()).thenReturn(new Observable<>(false));
 
         service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        when(service.getPersistence().persistSnapshotAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
         // As in the application, the protocol and its handlers get this service from the service provider.
         when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
         service.initialize().join();
@@ -141,13 +140,13 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         // The taker addresses the request to the network ID of the offer.
         BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
 
-        service.onMessage(request);
+        receive(request);
 
-        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        BisqEasyTradeReadModel trade = service.findTrade(request.getTradeId()).orElseThrow();
         assertThat(trade.getState()).isEqualTo(
                 BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__SELLER_DID_NOT_SENT_ACCOUNT_DATA__SELLER_DID_NOT_RECEIVED_BTC_ADDRESS);
-        assertThat(trade.getMaker().getContractSignatureData().get()).isNotNull();
-        assertThat(trade.getMyIdentity()).isEqualTo(makerIdentity);
+        assertThat(service.getPersistableStore().findTrade(trade.getId()).orElseThrow().getMaker().getContractSignatureData().get()).isNotNull();
+        assertThat(trade.getMyNetworkId()).isEqualTo(makerIdentity.getNetworkId());
         ArgumentCaptor<EnvelopePayloadMessage> sentMessage = ArgumentCaptor.forClass(EnvelopePayloadMessage.class);
         verify(serviceProvider.getNetworkService()).confidentialSend(sentMessage.capture(),
                 eq(takerIdentity.getNetworkId()),
@@ -163,21 +162,22 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         BisqEasyBtcAddressMessage addressMessage = new BisqEasyBtcAddressMessage("address-message",
                 request.getTradeId(), BisqEasyProtocol.VERSION, takerIdentity.getNetworkId(), offersNetworkId,
                 "bitcoin-address", contract.getOffer());
-        service.onMessage(addressMessage);
+        receive(addressMessage);
         BisqEasyTradeStore restoredStore = BisqEasyTradeStore.fromProto(service.getPersistableStore().toProto(false));
         service.shutdown().join();
         service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        when(service.getPersistence().persistSnapshotAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
         when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
         service.getPersistableStore().applyPersisted(restoredStore);
         service.initialize().join();
 
-        service.onMessage(request);
+        receive(request);
 
-        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        BisqEasyTradeReadModel trade = service.findTrade(request.getTradeId()).orElseThrow();
         assertThat(trade.getBitcoinPaymentData()).contains("bitcoin-address");
         assertThat(trade.getState()).isEqualTo(
                 BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__SELLER_DID_NOT_SENT_ACCOUNT_DATA__SELLER_RECEIVED_BTC_ADDRESS);
-        assertThat(service.getPendingMessages().isEmpty()).isTrue();
+        assertThat(service.getPersistableStore().getPendingMessages().isEmpty()).isTrue();
     }
 
     @Test
@@ -186,68 +186,39 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         BisqEasyBtcAddressMessage addressMessage = new BisqEasyBtcAddressMessage("address-message",
                 request.getTradeId(), BisqEasyProtocol.VERSION, takerIdentity.getNetworkId(), offersNetworkId,
                 "bitcoin-address", contract.getOffer());
-        service = spy(service);
-        when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
-        CountDownLatch lookupCompleted = new CountDownLatch(1);
+        CountDownLatch checkingMessage = new CountDownLatch(1);
         CountDownLatch resumeDelivery = new CountDownLatch(1);
-        CountDownLatch creationStarted = new CountDownLatch(1);
-        AtomicBoolean pauseFirstLookup = new AtomicBoolean(true);
-        AtomicReference<Thread> deliveryThread = new AtomicReference<>();
-        AtomicReference<Thread> creationThread = new AtomicReference<>();
+        AtomicBoolean pauseFirstMessage = new AtomicBoolean(true);
+        AtomicReference<Thread> owner = new AtomicReference<>();
+        var bannedUserService = serviceProvider.getUserService().getBannedUserService();
         doAnswer(invocation -> {
-            Object result = invocation.callRealMethod();
-            if (pauseFirstLookup.compareAndSet(true, false)) {
-                deliveryThread.set(Thread.currentThread());
-                lookupCompleted.countDown();
+            if (pauseFirstMessage.compareAndSet(true, false)) {
+                owner.set(Thread.currentThread());
+                checkingMessage.countDown();
                 assertThat(resumeDelivery.await(5, SECONDS)).isTrue();
+            } else {
+                assertThat(Thread.currentThread()).isSameAs(owner.get());
             }
-            return result;
-        }).when(service).findProtocol(request.getTradeId());
+            return false;
+        }).when(bannedUserService).isUserProfileBanned(takerIdentity.getNetworkId());
 
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            Future<?> delivery = executor.submit(() -> service.onMessage(addressMessage));
-            try {
-                assertThat(lookupCompleted.await(5, SECONDS)).isTrue();
-                Future<?> creation = executor.submit(() -> {
-                    creationThread.set(Thread.currentThread());
-                    creationStarted.countDown();
-                    service.onMessage(request);
-                });
-                assertThat(creationStarted.await(5, SECONDS)).isTrue();
-                // Before the fix creation finishes while delivery still holds its empty lookup. With the fix,
-                // publication waits for delivery to enqueue the message under the same monitor.
-                awaitCreationCompletedOrBlockedByDelivery(creation, creationThread.get(), deliveryThread.get());
-                resumeDelivery.countDown();
-                creation.get(5, SECONDS);
-                delivery.get(5, SECONDS);
-            } finally {
-                resumeDelivery.countDown();
-            }
+        try {
+            service.onMessage(addressMessage);
+            assertThat(checkingMessage.await(5, SECONDS)).isTrue();
+            // A second delivery is admitted while the first is paused. Creation cannot pass the first command.
+            service.onMessage(request);
+            assertThat(service.findTrade(request.getTradeId())).isEmpty();
+            resumeDelivery.countDown();
+            service.flush().get(5, SECONDS);
+        } finally {
+            resumeDelivery.countDown();
         }
 
-        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        BisqEasyTradeReadModel trade = service.findTrade(request.getTradeId()).orElseThrow();
         assertThat(trade.getBitcoinPaymentData()).contains("bitcoin-address");
         assertThat(trade.getState()).isEqualTo(
                 BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__SELLER_DID_NOT_SENT_ACCOUNT_DATA__SELLER_RECEIVED_BTC_ADDRESS);
-        assertThat(service.getPendingMessages().isEmpty()).isTrue();
-    }
-
-    private static void awaitCreationCompletedOrBlockedByDelivery(Future<?> creation,
-                                                                  Thread creationThread,
-                                                                  Thread deliveryThread) throws InterruptedException {
-        long deadline = System.nanoTime() + SECONDS.toNanos(5);
-        while (System.nanoTime() < deadline) {
-            if (creation.isDone()) {
-                return;
-            }
-            ThreadInfo threadInfo = ManagementFactory.getThreadMXBean().getThreadInfo(creationThread.threadId());
-            if (threadInfo != null && threadInfo.getThreadState() == Thread.State.BLOCKED &&
-                    threadInfo.getLockOwnerId() == deliveryThread.threadId()) {
-                return;
-            }
-            Thread.sleep(10);
-        }
-        throw new AssertionError("Protocol creation neither completed nor waited for message delivery");
+        assertThat(service.getPersistableStore().getPendingMessages().isEmpty()).isTrue();
     }
 
     @Test
@@ -259,7 +230,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
                 Optional.empty());
         BisqEasyTakeOfferRequest request = takeOfferRequest(othersContract, offersNetworkId);
 
-        assertThatCode(() -> service.onMessage(request)).doesNotThrowAnyException();
+        assertThatCode(() -> receive(request)).doesNotThrowAnyException();
 
         assertThat(service.findTrade(request.getTradeId())).isEmpty();
         verify(serviceProvider.getNetworkService(), never()).confidentialSend(any(), any(), any());
@@ -273,7 +244,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
                 Optional.empty());
         BisqEasyTakeOfferRequest request = takeOfferRequest(othersContract, keyWithoutIdentity.getNetworkId());
 
-        assertThatCode(() -> service.onMessage(request)).doesNotThrowAnyException();
+        assertThatCode(() -> receive(request)).doesNotThrowAnyException();
 
         assertThat(service.findTrade(request.getTradeId())).isEmpty();
         verify(serviceProvider.getNetworkService(), never()).confidentialSend(any(), any(), any());
@@ -289,7 +260,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
                 Optional.empty());
         BisqEasyTakeOfferRequest request = takeOfferRequest(contractOfOurOffer, otherOwnIdentity.getNetworkId());
 
-        assertThatCode(() -> service.onMessage(request)).doesNotThrowAnyException();
+        assertThatCode(() -> receive(request)).doesNotThrowAnyException();
 
         assertThat(service.findTrade(request.getTradeId())).isEmpty();
     }
@@ -298,12 +269,12 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
     void secondRequestForAnExistingTradeIsDropped() throws GeneralSecurityException {
         // A second request with the same offer, taker and take offer date has the trade ID of the first one.
         BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
-        service.onMessage(request);
-        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        receive(request);
+        BisqEasyTradeReadModel trade = service.findTrade(request.getTradeId()).orElseThrow();
         BisqEasyTradeState stateAfterFirstRequest = trade.getTradeState();
 
         BisqEasyTakeOfferRequest secondRequest = takeOfferRequest(contract, offersNetworkId);
-        assertThatCode(() -> service.onMessage(secondRequest)).doesNotThrowAnyException();
+        assertThatCode(() -> receive(secondRequest)).doesNotThrowAnyException();
 
         assertThat(service.getTrades()).containsExactly(trade);
         assertThat(trade.getTradeState()).isEqualTo(stateAfterFirstRequest);
@@ -315,7 +286,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         UserProfile makerProfile = userProfile(makerIdentity.getNetworkId());
         enableAutoAddToContactList(takerProfile, makerProfile);
 
-        service.onMessage(takeOfferRequest(contract, offersNetworkId));
+        receive(takeOfferRequest(contract, offersNetworkId));
 
         verify(serviceProvider.getUserService().getContactListService())
                 .addContactListEntry(takerProfile, makerProfile, ContactReason.BISQ_EASY_TRADE);
@@ -328,10 +299,10 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         removeOffersFromOfferbook();
         BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
 
-        service.onMessage(request);
+        receive(request);
 
         assertThat(service.findTrade(request.getTradeId())).isEmpty();
-        assertThat(service.findProtocol(request.getTradeId())).isEmpty();
+        assertThat(service.getTrades()).isEmpty();
         verify(serviceProvider.getUserService().getContactListService(), never())
                 .addContactListEntry(any(), any(), any());
         ArgumentCaptor<BisqEasyReportErrorMessage> report = ArgumentCaptor.forClass(BisqEasyReportErrorMessage.class);
@@ -348,7 +319,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
     void requestWithAnotherTradeIdIsDropped() throws GeneralSecurityException {
         BisqEasyTakeOfferRequest request = takeOfferRequest("another-trade-id", contract, offersNetworkId);
 
-        assertThatCode(() -> service.onMessage(request)).doesNotThrowAnyException();
+        assertThatCode(() -> receive(request)).doesNotThrowAnyException();
 
         assertThat(service.getTrades()).isEmpty();
         verify(serviceProvider.getNetworkService(), never()).confidentialSend(any(), any(), any());
@@ -367,7 +338,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         removeOffersFromOfferbook();
         BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
 
-        service.onMessage(request);
+        receive(request);
 
         assertThat(service.findTrade(request.getTradeId())).isEmpty();
         ArgumentCaptor<BisqEasyReportErrorMessage> report = ArgumentCaptor.forClass(BisqEasyReportErrorMessage.class);
@@ -380,13 +351,13 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
     @Test
     void copyOfRequestForAnExistingTradeIsDroppedWithoutValidation() throws GeneralSecurityException {
         BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
-        service.onMessage(request);
-        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        receive(request);
+        BisqEasyTradeReadModel trade = service.findTrade(request.getTradeId()).orElseThrow();
         // The validation would reject the copy, as the offer left the offerbook when it was taken
         removeOffersFromOfferbook();
         clearInvocations(serviceProvider.getNetworkService());
 
-        service.onMessage(takeOfferRequest(contract, offersNetworkId));
+        receive(takeOfferRequest(contract, offersNetworkId));
 
         assertThat(service.getTrades()).containsExactly(trade);
         verify(serviceProvider.getNetworkService(), never()).confidentialSend(any(), any(), any());
@@ -409,6 +380,11 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
     }
 
     // The author of an offerbook message is the maker of its offer.
+    private void receive(EnvelopePayloadMessage message) {
+        service.onMessage(message);
+        service.flush().join();
+    }
+
     private void addToOfferbook(BisqEasyOffer offer) {
         BisqEasyOfferbookMessage offerbookMessage = mock(BisqEasyOfferbookMessage.class);
         when(offerbookMessage.getBisqEasyOffer()).thenReturn(Optional.of(offer));
