@@ -15,9 +15,12 @@ processes it again when it processes the next message of a trade.
 ## Rules
 
 1. A node keeps a trade message whose trade does not exist as a pending message. It processes the pending messages
-   again when it processes a trade message of an existing trade. A pending message which the node then passes to the
-   protocol of its trade is no longer pending. A pending message of an existing trade whose sender is not the trade
-   peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines.
+   again when it processes a trade message of an existing trade. A node which has kept a message as a pending
+   message checks again whether the trade exists, and processes the message directly when it does: the take offer
+   request can create the trade on another thread while the message arrives, and the request processes the pending
+   messages only once. A pending message which the node then passes to the protocol of its trade is no longer
+   pending. A pending message of an existing trade whose sender is not the trade peer is dropped, as
+   [Sender of a trade message](trade-message-sender.md) defines.
 2. A node keeps at most 100 pending messages. When a message arrives while the node keeps 100 pending messages, the
    node drops the oldest pending message and keeps the new one. A message which is already pending does not change
    the number or the order of the pending messages.
@@ -44,6 +47,13 @@ processes it again when it processes the next message of a trade.
 
 ## Reasons
 
+- Rule 1, the check after keeping: the network layer delivers the messages of a trade on several threads, and it
+  treats a message as delivered when it decrypts it, so the sender does not send it again. A message which arrives
+  while the take offer request creates the trade can find no trade, and become pending after the request processed
+  the pending messages. No later message of the trade would process it, so the trade would wait for a step whose
+  message the peer delivered while the peer waits for our reaction to it. The check after keeping closes this
+  window. A message which both threads pass to the protocol changes the trade at most once, because the state
+  machine ignores a message of a type which it already processed.
 - Rule 2: anybody can send trade messages with made-up trade IDs to a node. Such a message never gets a trade, so
   without a bound it stays in memory until the node restarts, and the memory of the node grows without limit. A node
   has only a few trades whose messages can arrive before the trade exists, so 100 pending messages leave room for all

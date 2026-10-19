@@ -458,20 +458,31 @@ public final class MuSigTradeService extends RateLimitedPersistenceClient<MuSigT
             handleMuSigTradeMessage(message, protocol.orElseThrow());
             return;
         }
-        findProtocol(tradeId).ifPresentOrElse(protocol -> {
-                    if (isMessageOfTradePeer(message, protocol)) {
-                        handleMuSigTradeMessage(message, protocol);
-                    } else {
-                        pendingTradeMessages.remove(message);
-                    }
-                },
-                () -> {
-                    // Trade messages carry private data of the traders, so the log names only the message type.
-                    log.info("Protocol with tradeId {} not found. We add the message of type {} to pendingMessages " +
-                                    "for re-processing when the next message arrives.",
-                            StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
-                    pendingTradeMessages.add(message);
-                });
+        Optional<MuSigProtocol> protocol = findProtocol(tradeId);
+        if (protocol.isEmpty()) {
+            // Trade messages carry private data of the traders, so the log names only the message type.
+            log.info("Protocol with tradeId {} not found. We add the message of type {} to pendingMessages " +
+                            "for re-processing when the next message arrives.",
+                    StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
+            pendingTradeMessages.add(message);
+            // The take offer request of this trade can create the protocol on another thread while we get here: the
+            // network layer delivers messages of a trade on several threads. The request re-processes the pending
+            // messages once, after it created the protocol. If our message found no protocol before that pass, only
+            // a later message of the trade would re-process it, and the peer waits for our reaction in the meantime.
+            // The network layer treats the message as delivered at this point, so the peer does not send it again.
+            // So we check again whether the protocol exists and process the message directly if it does. A protocol
+            // which the request thread still creates after this check re-processes our message from pendingMessages.
+            protocol = findProtocol(tradeId);
+            if (protocol.isEmpty()) {
+                return;
+            }
+        }
+        MuSigProtocol existingProtocol = protocol.orElseThrow();
+        if (isMessageOfTradePeer(message, existingProtocol)) {
+            handleMuSigTradeMessage(message, existingProtocol);
+        } else {
+            pendingTradeMessages.remove(message);
+        }
     }
 
     // The state machine turns an exception of a message handler into a failure of the trade (Fsm.handle), and the
