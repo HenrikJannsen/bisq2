@@ -104,7 +104,7 @@ public final class BisqEasyTrade extends Trade<BisqEasyOffer, BisqEasyContract, 
     }
 
     @Override
-    public synchronized bisq.trade.protobuf.Trade.Builder getBuilder(boolean serializeForHash) {
+    public bisq.trade.protobuf.Trade.Builder getBuilder(boolean serializeForHash) {
         return getTradeBuilder(serializeForHash).setBisqEasyTrade(toBisqEasyTradeProto(serializeForHash));
     }
 

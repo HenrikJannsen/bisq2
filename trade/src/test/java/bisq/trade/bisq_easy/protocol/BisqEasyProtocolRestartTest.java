@@ -30,9 +30,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.QUOTE_AMOUNT;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.buyerAsTakerTrade;
@@ -45,7 +42,6 @@ import static bisq.trade.bisq_easy.protocol.BisqEasyTradeState.BUYER_RECEIVED_BT
 import static bisq.trade.bisq_easy.protocol.BisqEasyTradeState.BUYER_RECEIVED_SELLERS_FIAT_RECEIPT_CONFIRMATION;
 import static bisq.trade.bisq_easy.protocol.BisqEasyTradeState.BUYER_SENT_FIAT_SENT_CONFIRMATION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -145,54 +141,6 @@ class BisqEasyProtocolRestartTest {
 
         assertEquals(BUYER_SENT_FIAT_SENT_CONFIRMATION, restoredTrade.getState());
         assertTrue(restoredTrade.getEventQueue().isEmpty());
-    }
-
-    @Test
-    void persistenceWaitsForDeferredMessageAndStateToCommitTogether() throws Exception {
-        BisqEasyProtocol protocol = new BisqEasyBuyerAsTakerProtocol(serviceProvider, trade);
-        protocol.handle(bitcoinConfirmation);
-        CountDownLatch proofCommitted = new CountDownLatch(1);
-        CountDownLatch finishTransition = new CountDownLatch(1);
-        trade.paymentProofObservable().addObserver(proof -> {
-            if (proof.isPresent()) {
-                proofCommitted.countDown();
-                try {
-                    assertTrue(finishTransition.await(10, TimeUnit.SECONDS));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException(e);
-                }
-            }
-        });
-
-        CompletableFuture<bisq.trade.protobuf.Trade> snapshot = new CompletableFuture<>();
-        Thread handlingThread = new Thread(() -> protocol.handle(fiatReceipt));
-        Thread persistingThread = new Thread(() -> {
-            try {
-                snapshot.complete(trade.toProto(false));
-            } catch (Throwable throwable) {
-                snapshot.completeExceptionally(throwable);
-            }
-        });
-        try {
-            handlingThread.start();
-            assertTrue(proofCommitted.await(10, TimeUnit.SECONDS));
-            persistingThread.start();
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-            while (persistingThread.getState() != Thread.State.BLOCKED && persistingThread.isAlive()) {
-                assertTrue(System.nanoTime() < deadline, "Persistence did not wait for the trade transition");
-                Thread.sleep(1);
-            }
-            assertEquals(Thread.State.BLOCKED, persistingThread.getState());
-        } finally {
-            finishTransition.countDown();
-            handlingThread.join(TimeUnit.SECONDS.toMillis(10));
-            persistingThread.join(TimeUnit.SECONDS.toMillis(10));
-        }
-
-        assertFalse(handlingThread.isAlive());
-        assertFalse(persistingThread.isAlive());
-        assertBitcoinConfirmationApplied(BisqEasyTrade.fromProto(snapshot.get(10, TimeUnit.SECONDS)));
     }
 
     private static void assertBitcoinConfirmationApplied(BisqEasyTrade trade) {
