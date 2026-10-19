@@ -91,6 +91,7 @@ class TradePhaseBox {
         private final BisqEasyOpenTradeChannelService channelService;
         private final BannedUserService bannedUserService;
         private Pin bisqEasyTradeStatePin, isInMediationPin;
+        private boolean tradeStateSubscribed;
 
         private Controller(ServiceProvider serviceProvider) {
             bisqEasyMediationRequestService = serviceProvider.getSupportService().getBisqEasyMediationRequestService();
@@ -113,9 +114,7 @@ class TradePhaseBox {
 
         private void setBisqEasyTrade(BisqEasyTrade bisqEasyTrade) {
             model.setBisqEasyTrade(bisqEasyTrade);
-            if (bisqEasyTradeStatePin != null) {
-                bisqEasyTradeStatePin.unbind();
-            }
+            unbindTradeState();
             if (bisqEasyTrade == null) {
                 return;
             }
@@ -125,7 +124,11 @@ class TradePhaseBox {
             model.getPhase3Info().set(Res.get("bisqEasy.tradeState.phase3").toUpperCase());
             model.getPhase4Info().set(Res.get("bisqEasy.tradeState.phase4").toUpperCase());
 
+            tradeStateSubscribed = true;
             bisqEasyTradeStatePin = bisqEasyTrade.tradeStateObservable().addObserver(state -> UIThread.run(() -> {
+                if (!tradeStateSubscribed || model.getBisqEasyTrade() != bisqEasyTrade || bisqEasyTrade.getTradeState() != state) {
+                    return;
+                }
                 switch (state) {
                     case INIT:
                         break;
@@ -212,12 +215,22 @@ class TradePhaseBox {
 
         @Override
         public void onActivate() {
+            setBisqEasyTrade(model.getBisqEasyTrade());
         }
 
         @Override
         public void onDeactivate() {
+            unbindTradeState();
             if (isInMediationPin != null) {
                 isInMediationPin.unbind();
+            }
+        }
+
+        private void unbindTradeState() {
+            tradeStateSubscribed = false;
+            if (bisqEasyTradeStatePin != null) {
+                bisqEasyTradeStatePin.unbind();
+                bisqEasyTradeStatePin = null;
             }
         }
 

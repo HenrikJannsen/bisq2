@@ -149,7 +149,10 @@ public class TradeStateController implements Controller {
 
             bisqEasyTradeStatePin = trade.tradeStateObservable().addObserver(state ->
                     UIThread.run(() -> {
-                        applyStateInfoVBox(state);
+                        // A local action can advance the trade before a queued network update reaches the UI.
+                        if (model.getBisqEasyTrade().get() == trade && trade.getTradeState() == state) {
+                            applyStateInfoVBox(state);
+                        }
                     }));
 
             errorMessagePin = trade.errorMessageObservable().addObserver(errorMessage -> {
