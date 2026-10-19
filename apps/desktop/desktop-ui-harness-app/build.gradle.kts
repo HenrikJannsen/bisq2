@@ -24,6 +24,7 @@ dependencies {
     testImplementation("bisq:i18n")
     testImplementation("bisq:persistence")
     testImplementation("bisq:settings")
+    testImplementation("bisq:trade")
 }
 
 tasks {

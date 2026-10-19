@@ -18,6 +18,7 @@
 package bisq.desktop_ui_harness_app;
 
 import bisq.desktop.common.view.View;
+import bisq.desktop.main.content.bisq_easy.open_trades.trade_state.states.SellerPaymentAccountAutomationBinder;
 import bisq.desktop.common.view.ViewLifecycleObserver;
 import bisq.desktop.main.content.chat.message_container.ChatMessageContainerAutomationBinder;
 import bisq.desktop.main.content.mu_sig.offer.draft.create_offer.MuSigCreateOfferAutomationBinder;
@@ -40,6 +41,7 @@ final class DesktopAutomationViewObserver implements ViewLifecycleObserver {
     DesktopAutomationViewObserver() {
         this(List.of(
                 new ChatMessageContainerAutomationBinder(),
+                new SellerPaymentAccountAutomationBinder(),
                 new LeftNavAutomationBinder(),
                 new MuSigOfferbookAutomationBinder(),
                 new MuSigCreateOfferAutomationBinder(),
