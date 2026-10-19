@@ -188,6 +188,20 @@ class BisqEasyTradeServiceTradeTasksTest {
         assertThat(sentMessages).filteredOn(BisqEasyTakeOfferResponse.class::isInstance).hasSize(1);
     }
 
+    @Test
+    void writeOfTheStoreContainsACopyOfTheTradeAsItsTaskPersistedIt() throws Exception {
+        startService();
+
+        service.onMessage(takeOfferRequest(tradeId, sellerIdentity, contract));
+        service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
+
+        assertThat(service.getPersistableStore().getClone().getTrades()).singleElement().satisfies(written -> {
+            assertThat(written).isNotSameAs(service.findTrade(tradeId).orElseThrow());
+            assertThat(written.getTradeState()).isEqualTo(
+                    BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__BUYER_DID_NOT_SENT_BTC_ADDRESS__BUYER_DID_NOT_RECEIVED_ACCOUNT_DATA);
+        });
+    }
+
     // The network layer passes the messages which it received before the subscription to the new listener
     @Test
     void messageWhichTheNetworkReplaysAtTheSubscriptionReachesTheProtocolOfItsStoredTrade() throws Exception {

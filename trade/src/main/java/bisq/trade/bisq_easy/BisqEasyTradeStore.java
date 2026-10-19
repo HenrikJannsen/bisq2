@@ -22,6 +22,7 @@ import bisq.common.proto.ProtoResolver;
 import bisq.common.proto.ProtobufUtils;
 import bisq.common.proto.UnresolvableProtobufException;
 import bisq.common.proto.UnresolvableProtobufMessageException;
+import bisq.common.util.ExceptionUtil;
 import bisq.persistence.PersistableStore;
 import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -31,9 +32,11 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Getter(AccessLevel.PACKAGE)
@@ -45,6 +48,12 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
     // We keep track of all trades by storing the trade IDs to avoid that the same trade can be taken again.
     private final ObservableSet<String> tradeIds = new ObservableSet<>();
     private final ObservableSet<BisqEasyClosedTrade> closedTrades = new ObservableSet<>();
+
+    // Copies of the trades as the last task of each trade persisted them. A write reads only these copies: the tasks of
+    // other trades change their live trades at the same time, and a write of a live trade could store the trade in the
+    // middle of a transition (docs/specifications/trade/trade-task-execution.md).
+    private final Map<String, BisqEasyTrade> copyOfTradeById = new ConcurrentHashMap<>();
+    private final Map<String, BisqEasyClosedTrade> copyOfClosedTradeById = new ConcurrentHashMap<>();
 
     BisqEasyTradeStore(Set<BisqEasyTrade> trades, Set<String> tradeIds, Set<BisqEasyClosedTrade> closedTrades) {
         this.trades.setAll(trades);
@@ -111,9 +120,12 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
         };
     }
 
+    // The store for a write. It contains the copies which addTrade, applyPersisted and updateCopyOfTrade took.
     @Override
     public BisqEasyTradeStore getClone() {
-        return new BisqEasyTradeStore(Set.copyOf(trades), Set.copyOf(tradeIds), Set.copyOf(closedTrades));
+        return new BisqEasyTradeStore(Set.copyOf(copyOfTradeById.values()),
+                Set.copyOf(tradeIds),
+                Set.copyOf(copyOfClosedTradeById.values()));
     }
 
     @Override
@@ -121,6 +133,24 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
         trades.setAll(persisted.getTrades());
         tradeIds.setAll(persisted.getTradeIds());
         closedTrades.setAll(persisted.getClosedTrades());
+        copyOfTradeById.clear();
+        copyOfClosedTradeById.clear();
+        trades.forEach(trade -> copyOfTradeById.put(trade.getId(), copyOf(trade)));
+        closedTrades.forEach(closedTrade -> copyOfClosedTradeById.put(closedTrade.trade().getId(), copyOf(closedTrade)));
+    }
+
+    /**
+     * Takes the copy of the trade for the next write, as the trade is in this store: open, closed, or removed. Must run
+     * in a task of the trade, so that no other task changes the trade meanwhile.
+     */
+    void updateCopyOfTrade(String tradeId) {
+        findTrade(tradeId).ifPresentOrElse(trade -> copyOfTradeById.put(tradeId, copyOf(trade)),
+                () -> copyOfTradeById.remove(tradeId));
+        closedTrades.stream()
+                .filter(closedTrade -> closedTrade.trade().getId().equals(tradeId))
+                .findAny()
+                .ifPresentOrElse(closedTrade -> copyOfClosedTradeById.put(tradeId, copyOf(closedTrade)),
+                        () -> copyOfClosedTradeById.remove(tradeId));
     }
 
     ObservableSet<BisqEasyTrade> getAllTrades() {
@@ -130,9 +160,11 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
         return allTrades;
     }
 
+    // Runs in a task of the trade, or before the trade service starts
     void addTrade(BisqEasyTrade trade) {
         trades.add(trade);
         tradeIds.add(trade.getId());
+        copyOfTradeById.put(trade.getId(), copyOf(trade));
     }
 
     Optional<BisqEasyTrade> findTrade(String tradeId) {
@@ -141,5 +173,27 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
 
     boolean tradeExists(String tradeId) {
         return tradeIds.contains(tradeId);
+    }
+
+    // A copy through the protobuf form. If that fails, the write uses the live trade, as before the copies.
+    private static BisqEasyTrade copyOf(BisqEasyTrade trade) {
+        try {
+            return BisqEasyTrade.fromProto(trade.toProto(false));
+        } catch (Exception e) {
+            // The message of the exception can contain data of the trade, so we log only its type and stack trace
+            log.error("Could not copy the trade {} for writing. We write the trade itself. Cause: {}",
+                    trade.getId(), ExceptionUtil.getSafeStackTraceAsString(e));
+            return trade;
+        }
+    }
+
+    private static BisqEasyClosedTrade copyOf(BisqEasyClosedTrade closedTrade) {
+        try {
+            return BisqEasyClosedTrade.fromProto(closedTrade.toProto(false));
+        } catch (Exception e) {
+            log.error("Could not copy the closed trade {} for writing. We write the closed trade itself. Cause: {}",
+                    closedTrade.trade().getId(), ExceptionUtil.getSafeStackTraceAsString(e));
+            return closedTrade;
+        }
     }
 }

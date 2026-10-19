@@ -31,6 +31,10 @@ the trade stopped. Locks in single places did not cover all such combinations.
    a future of the task.
 10. Closing a trade, deleting a closed trade and redacting the payment account data of a trade run as tasks of the
     trade.
+11. A task which changed a trade persists it. It then takes a copy of the trade. A write of the trade store contains,
+    for each trade, the copy which the last task of that trade took, and never reads a live trade. The node writes the
+    trade store for every request: the requests which arrive during a write are written together after it (see
+    [Store write results](../persistence/store-write-results.md)).
 
 ## Reasons
 
@@ -62,3 +66,8 @@ the trade stopped. Locks in single places did not cover all such combinations.
   reported by the call, so the user gets the error before the action is submitted.
 - Rule 10: closing removes the protocol, and a message or an action which runs at the same time could still change the
   trade. The redaction runs from a timer and changes the data of open and closed trades.
+- Rule 11: the store holds all trades, and the tasks of different trades run at the same time. A write which serialized
+  the live trades could store a trade in the middle of a transition of its task, for example the data of a message
+  without the state which it led to. Copying the store also computed the hash codes of the live trades, which can fail
+  while another task changes a trade. Before this rule, the trade store dropped a request which came within one second
+  of the previous write, and a crash lost the change.

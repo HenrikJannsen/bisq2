@@ -46,9 +46,9 @@ import bisq.network.identity.NetworkId;
 import bisq.network.p2p.message.EnvelopePayloadMessage;
 import bisq.network.p2p.services.confidential.ConfidentialMessageService;
 import bisq.offer.bisq_easy.BisqEasyOffer;
+import bisq.persistence.CoalescingPersistenceClient;
 import bisq.persistence.DbSubDirectory;
 import bisq.persistence.Persistence;
-import bisq.persistence.RateLimitedPersistenceClient;
 import bisq.settings.SettingsService;
 import bisq.trade.ServiceProvider;
 import bisq.trade.TradeActionNotAppliedException;
@@ -114,7 +114,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 @Slf4j
 @Getter
-public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyTradeStore> implements Service, ConfidentialMessageService.Listener {
+public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTradeStore> implements Service, ConfidentialMessageService.Listener {
     // Tasks of different trades can run at the same time. A task of a trade which waits for the network does not stop
     // the tasks of the other trades.
     private static final int NUM_TRADE_TASK_THREADS = 4;
@@ -523,8 +523,10 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     // Misc API
     /* --------------------------------------------------------------------- */
 
-    // Persists the trade after a change. Must run in a task of the trade.
+    // Persists the trade after a change. Must run in a task of the trade: the copy which the write uses is taken here,
+    // while no other task changes the trade.
     public void persistTrade(BisqEasyTrade trade) {
+        persistableStore.updateCopyOfTrade(trade.getId());
         persist();
     }
 
