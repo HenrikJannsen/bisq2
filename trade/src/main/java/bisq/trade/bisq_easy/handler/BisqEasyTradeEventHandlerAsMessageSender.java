@@ -18,11 +18,15 @@
 package bisq.trade.bisq_easy.handler;
 
 import bisq.common.fsm.Event;
+import bisq.network.SendMessageResult;
 import bisq.trade.ServiceProvider;
 import bisq.trade.bisq_easy.BisqEasyTrade;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.protocol.handler.TradeEventHandlerAsMessageSender;
+import bisq.trade.protocol.messages.TradeMessage;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Our trade messages carry {@code trade.getMyself().getNetworkId()} as sender: the network ID which the trade peer
@@ -42,5 +46,12 @@ public abstract class BisqEasyTradeEventHandlerAsMessageSender<T extends BisqEas
 
     public final void handle(E event) {
         super.handle(event);
+    }
+
+    // The trade service sends the message in a queue of the trade on other threads, so the task of the trade does not
+    // wait for the network (docs/specifications/trade/trade-task-execution.md)
+    @Override
+    protected CompletableFuture<SendMessageResult> send(TradeMessage message) {
+        return tradeService.sendTradeMessage(trade, () -> super.send(message));
     }
 }

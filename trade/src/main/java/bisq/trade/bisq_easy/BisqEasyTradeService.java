@@ -42,6 +42,7 @@ import bisq.i18n.Res;
 import bisq.identity.Identity;
 import bisq.identity.IdentityService;
 import bisq.network.NetworkService;
+import bisq.network.SendMessageResult;
 import bisq.network.identity.NetworkId;
 import bisq.network.p2p.message.EnvelopePayloadMessage;
 import bisq.network.p2p.services.confidential.ConfidentialMessageService;
@@ -103,6 +104,8 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static bisq.trade.bisq_easy.protocol.messages.BisqEasyReportErrorMessage.MAX_LENGTH_ERROR_MESSAGE;
@@ -149,16 +152,33 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
     private final Executor tradeTaskThreads;
     @Getter(AccessLevel.NONE)
     private final TradeTaskExecutor tradeTaskExecutor;
+    // Sends the messages of each trade one after the other. A send waits for the network.
+    @Getter(AccessLevel.NONE)
+    private final Executor tradeMessageSendThreads;
+    @Getter(AccessLevel.NONE)
+    private final TradeTaskExecutor tradeMessageSendExecutor;
 
     public BisqEasyTradeService(ServiceProvider serviceProvider, AppType appType) {
-        this(serviceProvider, appType, ExecutorFactory.newFixedThreadPool("BisqEasyTradeTask", NUM_TRADE_TASK_THREADS));
+        this(serviceProvider,
+                appType,
+                ExecutorFactory.newFixedThreadPool("BisqEasyTradeTask", NUM_TRADE_TASK_THREADS),
+                ExecutorFactory.newCachedThreadPool("BisqEasyTradeMessageSend"));
     }
 
-    // Tests pass an executor which runs the tasks in the calling thread
+    // Tests pass an executor which runs the tasks and the sends in the calling thread
     @VisibleForTesting
-    BisqEasyTradeService(ServiceProvider serviceProvider, AppType appType, Executor tradeTaskThreads) {
+    BisqEasyTradeService(ServiceProvider serviceProvider, AppType appType, Executor executor) {
+        this(serviceProvider, appType, executor, executor);
+    }
+
+    private BisqEasyTradeService(ServiceProvider serviceProvider,
+                                 AppType appType,
+                                 Executor tradeTaskThreads,
+                                 Executor tradeMessageSendThreads) {
         this.tradeTaskThreads = tradeTaskThreads;
         tradeTaskExecutor = new TradeTaskExecutor(tradeTaskThreads);
+        this.tradeMessageSendThreads = tradeMessageSendThreads;
+        tradeMessageSendExecutor = new TradeTaskExecutor(tradeMessageSendThreads);
         this.serviceProvider = serviceProvider;
         networkService = serviceProvider.getNetworkService();
         identityService = serviceProvider.getIdentityService();
@@ -251,11 +271,18 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
 
         networkService.removeConfidentialMessageListener(this);
 
-        // The tasks which were submitted before still run, so their changes reach the store before it gets persisted
+        // The tasks which were submitted before still run, so their changes reach the store before it gets persisted.
+        // Then the messages which they sent are handed to the network, which keeps an unsent message for a resend.
         if (!tradeTaskExecutor.shutdown(TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC, TimeUnit.SECONDS)) {
             log.warn("Not all trade tasks completed within {} seconds at shutdown", TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC);
         }
+        if (!tradeMessageSendExecutor.shutdown(TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC, TimeUnit.SECONDS)) {
+            log.warn("Not all trade messages were sent within {} seconds at shutdown", TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC);
+        }
         if (tradeTaskThreads instanceof ExecutorService executorService) {
+            ExecutorFactory.shutdownAndAwaitTermination(executorService);
+        }
+        if (tradeMessageSendThreads != tradeTaskThreads && tradeMessageSendThreads instanceof ExecutorService executorService) {
             ExecutorFactory.shutdownAndAwaitTermination(executorService);
         }
         return CompletableFuture.completedFuture(true);
@@ -491,7 +518,8 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
     // BisqEasyProtocol turns a failure into the FAILED state. So we report it here: the returned future fails with
     // TradeActionNotAppliedException, and the caller sends the trade log message only if it completes normally.
     // Otherwise a peer which cancelled or failed the trade would still get the data. A trade restriction is reported
-    // by an exception of this call (docs/specifications/trade/trade-log-of-user-actions.md).
+    // by an exception of this call (docs/specifications/trade/trade-log-of-user-actions.md). The future completes when
+    // the messages which the action sent were handed to the network, so the trade log message follows them.
     private CompletableFuture<Void> applyUserTradeAction(BisqEasyTrade trade, BisqEasyTradeEvent event) {
         verifyTradingNotOnHalt();
         verifyMinVersionForTrading();
@@ -507,7 +535,7 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
             if (state == BisqEasyTradeState.FAILED || state == BisqEasyTradeState.FAILED_AT_PEER) {
                 throw new TradeActionNotAppliedException("The trade failed at handling " + event.getClass().getSimpleName());
             }
-        });
+        }).thenCompose(nil -> afterSendsOfTrade(tradeId));
     }
 
     private CompletableFuture<Void> handleBisqEasyTradeEvent(BisqEasyTrade trade, BisqEasyTradeEvent event) {
@@ -515,7 +543,8 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
         verifyMinVersionForTrading();
         String tradeId = trade.getId();
         return submitTradeTask(tradeId, () -> findProtocol(tradeId).ifPresentOrElse(protocol -> protocol.handle(event),
-                () -> log.info("Protocol with tradeId {} not found. This is expected if the trade have been closed already", tradeId)));
+                        () -> log.info("Protocol with tradeId {} not found. This is expected if the trade have been closed already", tradeId)))
+                .thenCompose(nil -> afterSendsOfTrade(tradeId));
     }
 
 
@@ -663,7 +692,8 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
                 StringUtils.truncate(ExceptionUtil.getRootCauseMessage(exception), MAX_LENGTH_ERROR_MESSAGE),
                 StringUtils.truncate(ExceptionUtil.getSafeStackTraceAsString(exception), MAX_LENGTH_STACKTRACE),
                 tradeProtocolFailure);
-        networkService.confidentialSend(report, takerNetworkId, myIdentity.getNetworkIdWithKeyPair());
+        sendTradeMessage(bisqEasyTrade, () -> networkService.confidentialSend(report, takerNetworkId,
+                myIdentity.getNetworkIdWithKeyPair()));
     }
 
     // The request is data of its sender, so the log names only the message type and the sanitized trade ID.
@@ -803,6 +833,29 @@ public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTr
     /* --------------------------------------------------------------------- */
     // Trade tasks
     /* --------------------------------------------------------------------- */
+
+    /**
+     * Sends a message of the trade. A send waits for the network, at most about 150 seconds. The messages of a trade are
+     * sent in a queue of the trade on threads of their own, so a task of the trade does not wait for the network, and
+     * the messages leave in the order in which the tasks of the trade sent them.
+     */
+    public CompletableFuture<SendMessageResult> sendTradeMessage(BisqEasyTrade trade,
+                                                                 Supplier<CompletableFuture<SendMessageResult>> send) {
+        String tradeId = trade.getId();
+        return tradeMessageSendExecutor.supply(tradeId, send)
+                .thenCompose(Function.identity())
+                .whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("Sending a message of trade {} failed", StringUtils.sanitizeForLog(tradeId), throwable);
+                    }
+                });
+    }
+
+    // Completes when the messages of the trade which were sent before have been handed to the network
+    private CompletableFuture<Void> afterSendsOfTrade(String tradeId) {
+        return tradeMessageSendExecutor.submit(tradeId, () -> {
+        });
+    }
 
     // Completes when the tasks of the trade which were submitted before have run
     @VisibleForTesting

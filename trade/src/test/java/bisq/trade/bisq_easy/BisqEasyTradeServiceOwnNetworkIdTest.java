@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * A node sends its trade messages under the network ID which its trade peer stored for it. The maker's identity can
@@ -62,6 +63,8 @@ class BisqEasyTradeServiceOwnNetworkIdTest {
     void setUp() {
         serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
         service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
+        // As in the application, the handlers send through this service, which they get from the service provider
+        when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
     }
 
     @AfterEach

@@ -44,6 +44,7 @@ import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
 import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyAccountDataMessage;
+import bisq.trade.bisq_easy.protocol.messages.BisqEasyBtcAddressMessage;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyReportErrorMessage;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTakeOfferRequest;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTakeOfferResponse;
@@ -71,6 +72,7 @@ import java.util.concurrent.TimeUnit;
 import static bisq.trade.bisq_easy.BisqEasyTakeOfferRequestTestFixtures.makerAcceptsTakeOfferRequests;
 import static bisq.trade.bisq_easy.BisqEasyTakeOfferRequestTestFixtures.takeOfferRequest;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.QUOTE_AMOUNT;
+import static bisq.trade.bisq_easy.BisqEasyTradeTestData.channel;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.contract;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.userProfile;
@@ -89,6 +91,7 @@ import static org.mockito.Mockito.when;
 @Isolated
 class BisqEasyTradeServiceTradeTasksTest {
     private static final String ACCOUNT_DATA = "SEPA account of the seller";
+    private static final String BTC_ADDRESS = "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq";
 
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private final ServiceProvider serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
@@ -99,6 +102,10 @@ class BisqEasyTradeServiceTradeTasksTest {
     private final BisqEasyContract contract = contract(offer, sellerIdentity.getNetworkId(), Optional.empty());
     private final String tradeId = new BisqEasyTrade(contract, false, true, sellerIdentity, offer,
             sellerIdentity.getNetworkId(), buyerIdentity.getNetworkId()).getId();
+    // A send of a message of this type waits until the test releases it
+    private volatile Class<?> blockedSendType = Void.class;
+    private final CountDownLatch blockedSendStarted = new CountDownLatch(1);
+    private final CountDownLatch releaseBlockedSend = new CountDownLatch(1);
     private BisqEasyTradeService service;
 
     @BeforeEach
@@ -110,13 +117,21 @@ class BisqEasyTradeServiceTradeTasksTest {
                 .thenReturn(new ReputationScore(1_000_000, 5, 1));
         when(serviceProvider.getSettingsService().getCloseMyOfferWhenTaken()).thenReturn(new Observable<>(false));
         when(serviceProvider.getNetworkService().confidentialSend(any(), any(), any())).thenAnswer(invocation -> {
-            sentMessages.add(invocation.getArgument(0));
+            Object message = invocation.getArgument(0);
+            if (blockedSendType.isInstance(message)) {
+                blockedSendStarted.countDown();
+                releaseBlockedSend.await(10, TimeUnit.SECONDS);
+            }
+            sentMessages.add(message);
             return CompletableFuture.completedFuture(new SendMessageResult());
         });
+        when(serviceProvider.getChatService().getBisqEasyOpenTradeChannelService().findChannelByTradeId(tradeId))
+                .thenReturn(Optional.of(channel(makersTrade(), offer, userProfile(sellerIdentity.getNetworkId()), Optional.empty())));
     }
 
     @AfterEach
     void tearDown() {
+        releaseBlockedSend.countDown();
         if (service != null) {
             service.shutdown().join();
         }
@@ -200,6 +215,44 @@ class BisqEasyTradeServiceTradeTasksTest {
             assertThat(written.getTradeState()).isEqualTo(
                     BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__BUYER_DID_NOT_SENT_BTC_ADDRESS__BUYER_DID_NOT_RECEIVED_ACCOUNT_DATA);
         });
+    }
+
+    // The response to the request waits for the network. The account data, which arrives meanwhile, is processed.
+    @Test
+    void taskOfTheTradeDoesNotWaitForTheNetwork() throws Exception {
+        blockedSendType = BisqEasyTakeOfferResponse.class;
+        startService();
+
+        service.onMessage(takeOfferRequest(tradeId, sellerIdentity, contract));
+        assertThat(blockedSendStarted.await(10, TimeUnit.SECONDS)).isTrue();
+        service.onMessage(accountDataMessage());
+        service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
+
+        assertThat(service.findTrade(tradeId).orElseThrow().getPaymentAccountData()).contains(ACCOUNT_DATA);
+        assertThat(sentMessages).noneMatch(BisqEasyTakeOfferResponse.class::isInstance);
+        releaseBlockedSend.countDown();
+    }
+
+    // The desktop sends the trade log message of an action when its future completes. The protocol message of the
+    // action has left before, as when the trade sent it in the calling thread.
+    @Test
+    void futureOfAUserActionCompletesWhenItsMessageWasSent() throws Exception {
+        startService();
+        service.onMessage(takeOfferRequest(tradeId, sellerIdentity, contract));
+        service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
+        blockedSendType = BisqEasyBtcAddressMessage.class;
+        BisqEasyTrade trade = service.findTrade(tradeId).orElseThrow();
+
+        CompletableFuture<Void> action = service.buyerSendBitcoinPaymentData(trade, BTC_ADDRESS);
+        assertThat(blockedSendStarted.await(10, TimeUnit.SECONDS)).isTrue();
+        service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
+
+        assertThat(trade.getTradeState()).isEqualTo(
+                BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__BUYER_SENT_BTC_ADDRESS__BUYER_DID_NOT_RECEIVED_ACCOUNT_DATA);
+        assertThat(action).isNotDone();
+        releaseBlockedSend.countDown();
+        action.get(10, TimeUnit.SECONDS);
+        assertThat(sentMessages).anyMatch(BisqEasyBtcAddressMessage.class::isInstance);
     }
 
     // The network layer passes the messages which it received before the subscription to the new listener

@@ -17,12 +17,15 @@
 
 package bisq.trade.bisq_easy.handler;
 
+import bisq.network.SendMessageResult;
 import bisq.trade.ServiceProvider;
 import bisq.trade.bisq_easy.BisqEasyTrade;
 import bisq.trade.bisq_easy.BisqEasyTradeService;
 import bisq.trade.protocol.handler.TradeMessageHandlerAsMessageSender;
 import bisq.trade.protocol.messages.TradeMessage;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public abstract class BisqEasyTradeMessageHandlerAsMessageSender<T extends BisqEasyTrade, M extends TradeMessage> extends TradeMessageHandlerAsMessageSender<T, M> {
@@ -36,5 +39,12 @@ public abstract class BisqEasyTradeMessageHandlerAsMessageSender<T extends BisqE
 
     public final void handle(M message) {
         super.handle(message);
+    }
+
+    // The trade service sends the message in a queue of the trade on other threads, so the task of the trade does not
+    // wait for the network (docs/specifications/trade/trade-task-execution.md)
+    @Override
+    protected CompletableFuture<SendMessageResult> send(TradeMessage message) {
+        return tradeService.sendTradeMessage(trade, () -> super.send(message));
     }
 }

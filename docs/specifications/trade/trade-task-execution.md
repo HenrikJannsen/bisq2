@@ -35,6 +35,10 @@ the trade stopped. Locks in single places did not cover all such combinations.
     for each trade, the copy which the last task of that trade took, and never reads a live trade. The node writes the
     trade store for every request: the requests which arrive during a write are written together after it (see
     [Store write results](../persistence/store-write-results.md)).
+12. A task does not wait for the network. The node sends the messages of a trade in a queue of that trade on threads of
+    their own, in the order in which the tasks of the trade sent them. The future of a user action completes when the
+    messages which the action sent were handed to the network. At shutdown, the node waits for the queued messages for
+    a limited time, after the queued tasks.
 
 ## Reasons
 
@@ -71,3 +75,9 @@ the trade stopped. Locks in single places did not cover all such combinations.
   without the state which it led to. Copying the store also computed the hash codes of the live trades, which can fail
   while another task changes a trade. Before this rule, the trade store dropped a request which came within one second
   of the previous write, and a crash lost the change.
+- Rule 12: a send can wait for the network for up to about 150 seconds, for example on a connection which accepts no
+  data. A task which sent synchronously stopped its trade for that time, and it held a thread of the pool. The caller
+  sends the trade log message of an action when the future completes, so the trade log message still leaves after the
+  protocol message of the action (see [Trade log messages of user actions](trade-log-of-user-actions.md)). The network
+  layer registers a message for a resend only when its send starts, so the node lets the queued messages start before
+  it stops.
