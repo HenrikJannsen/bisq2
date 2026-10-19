@@ -436,7 +436,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
 
         checkArgument(!tradeExists(bisqEasyTrade.getId()), "A trade with that ID exists already");
         persistableStore.addTrade(bisqEasyTrade);
-        persist();
+        persistTrade(bisqEasyTrade);
 
         maybeAddPeerToContactList(bisqEasyTrade.getMaker().getNetworkId().getId(),
                 bisqEasyTrade.getTaker().getNetworkId().getId());
@@ -523,6 +523,11 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     // Misc API
     /* --------------------------------------------------------------------- */
 
+    // Persists the trade after a change. Must run in a task of the trade.
+    public void persistTrade(BisqEasyTrade trade) {
+        persist();
+    }
+
     public Optional<BisqEasyProtocol> findProtocol(String id) {
         return Optional.ofNullable(tradeProtocolById.get(id));
     }
@@ -561,7 +566,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
             persistableStore.getClosedTrades().add(bisqEasyClosedTrade);
 
             tradeProtocolById.remove(trade.getId());
-            persist();
+            persistTrade(trade);
         });
     }
 
@@ -573,7 +578,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                     .findFirst();
             if (closedTrade.isPresent()) {
                 closedTrades.remove(closedTrade.get());
-                persist();
+                persistTrade(trade);
             } else {
                 log.warn("Could not delete trade {}", trade.getId());
             }
@@ -631,7 +636,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
             return Optional.empty();
         }
         persistableStore.addTrade(bisqEasyTrade);
-        persist();
+        persistTrade(bisqEasyTrade);
 
         maybeAddPeerToContactList(sender.getId(), myIdentity.get().getId());
 
@@ -776,7 +781,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                     // The trade can have changed since the check above
                     if (isDataToRedact(trade, redactDate, redactDateForNotCompletedTrades, redactedMarker)) {
                         trade.setPaymentAccountData(Optional.of(redactedMarker));
-                        persist();
+                        persistTrade(trade);
                     }
                 }));
     }

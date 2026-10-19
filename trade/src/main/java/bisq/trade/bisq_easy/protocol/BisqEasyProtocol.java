@@ -55,7 +55,7 @@ public abstract class BisqEasyProtocol extends TradeProtocol<BisqEasyTrade> {
 
     @Override
     protected void persist() {
-        getServiceProvider().getBisqEasyTradeService().persist();
+        getServiceProvider().getBisqEasyTradeService().persistTrade(getTrade());
     }
 
     public BisqEasyTrade getTrade() {
