@@ -37,36 +37,46 @@ import java.util.function.Predicate;
 @Slf4j
 final class BisqEasyPublishedSet<T> extends AbstractSet<T> implements ReadOnlyObservableSet<T> {
     private volatile Set<T> snapshot = Set.of();
-    private final List<CollectionObserver<T>> observers = new ArrayList<>();
+    private final List<Registration> observers = new ArrayList<>();
+    private final BisqEasyNotificationQueue notifications = new BisqEasyNotificationQueue();
 
-    synchronized void publish(Collection<? extends T> values) {
-        Set<T> next = Set.copyOf(values);
-        Set<T> previous = snapshot;
-        snapshot = next;
-        List<T> removed = previous.stream().filter(value -> !next.contains(value)).toList();
-        List<T> added = next.stream().filter(value -> !previous.contains(value)).toList();
-        if (removed.isEmpty() && added.isEmpty()) {
-            return;
+    void publish(Collection<? extends T> values) {
+        synchronized (notifications) {
+            Set<T> next = Set.copyOf(values);
+            Set<T> previous = snapshot;
+            snapshot = next;
+            List<T> removed = previous.stream().filter(value -> !next.contains(value)).toList();
+            List<T> added = next.stream().filter(value -> !previous.contains(value)).toList();
+            if (removed.isEmpty() && added.isEmpty()) {
+                return;
+            }
+            List<Registration> recipients = List.copyOf(observers);
+            notifications.enqueue(() -> recipients.forEach(registration -> registration.notifyObserver(observer -> {
+                if (!removed.isEmpty()) {
+                    observer.onAllRemoved(removed);
+                }
+                if (!added.isEmpty()) {
+                    observer.onAllAdded(added);
+                }
+            })));
         }
-        List.copyOf(observers).forEach(observer -> notifyObserver(() -> {
-            if (!removed.isEmpty()) {
-                observer.onAllRemoved(removed);
-            }
-            if (!added.isEmpty()) {
-                observer.onAllAdded(added);
-            }
-        }));
+        notifications.drain();
     }
 
     @Override
-    public synchronized Pin addObserver(CollectionObserver<T> observer) {
-        observers.add(observer);
-        notifyObserver(() -> observer.onAllAdded(snapshot));
-        return () -> removeObserver(observer);
+    public Pin addObserver(CollectionObserver<T> observer) {
+        Registration registration = new Registration(observer);
+        synchronized (notifications) {
+            observers.add(registration);
+            Set<T> initial = snapshot;
+            notifications.enqueue(() -> registration.notifyObserver(current -> current.onAllAdded(initial)));
+        }
+        notifications.drain();
+        return () -> removeObserver(registration);
     }
 
     @Override
-    public synchronized Pin addObserver(Runnable observer) {
+    public Pin addObserver(Runnable observer) {
         CollectionObserver<T> adapter = new CollectionObserver<>() {
             @Override
             public void onAdded(T element) {
@@ -83,31 +93,54 @@ final class BisqEasyPublishedSet<T> extends AbstractSet<T> implements ReadOnlyOb
                 observer.run();
             }
         };
-        observers.add(adapter);
-        notifyObserver(observer);
-        return () -> removeObserver(adapter);
+        Registration registration = new Registration(adapter);
+        synchronized (notifications) {
+            observers.add(registration);
+            notifications.enqueue(() -> registration.notifyObserver(unused -> observer.run()));
+        }
+        notifications.drain();
+        return () -> removeObserver(registration);
     }
 
     @Override
-    public synchronized <R> Pin addCollectionChangeMapper(Collection<R> collection,
+    public <R> Pin addCollectionChangeMapper(Collection<R> collection,
                                                           Function<T, Boolean> filterFunction,
                                                           Function<T, R> mapFunction,
                                                           Consumer<Runnable> executor) {
         CollectionChangeMapper<T, R> mapper = new CollectionChangeMapper<>(collection, filterFunction, mapFunction, executor);
-        observers.add(mapper);
-        notifyObserver(() -> mapper.onAllSet(snapshot));
-        return () -> removeObserver(mapper);
+        Registration registration = new Registration(mapper);
+        synchronized (notifications) {
+            observers.add(registration);
+            Set<T> initial = snapshot;
+            notifications.enqueue(() -> registration.notifyObserver(current -> current.onAllSet(initial)));
+        }
+        notifications.drain();
+        return () -> removeObserver(registration);
     }
 
-    private synchronized void removeObserver(CollectionObserver<T> observer) {
-        observers.remove(observer);
+    private void removeObserver(Registration registration) {
+        synchronized (notifications) {
+            registration.active = false;
+            observers.remove(registration);
+        }
     }
 
-    private void notifyObserver(Runnable notification) {
-        try {
-            notification.run();
-        } catch (Exception exception) {
-            log.error("Trade collection observer failed", exception);
+    private final class Registration {
+        private final CollectionObserver<T> observer;
+        private volatile boolean active = true;
+
+        private Registration(CollectionObserver<T> observer) {
+            this.observer = observer;
+        }
+
+        private void notifyObserver(Consumer<CollectionObserver<T>> notification) {
+            if (active) {
+                try {
+                    notification.accept(observer);
+                } catch (Exception exception) {
+                    log.error("Trade collection observer failed: {}", exception.getClass().getSimpleName());
+                }
+            }
         }
     }
 

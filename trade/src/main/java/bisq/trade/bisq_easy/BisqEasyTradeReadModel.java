@@ -36,11 +36,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -61,7 +61,7 @@ public final class BisqEasyTradeReadModel {
     private volatile BisqEasyTradeSnapshot snapshot;
 
     @Getter(lombok.AccessLevel.NONE)
-    private final Object publicationLock = new Object();
+    private final BisqEasyNotificationQueue notifications = new BisqEasyNotificationQueue();
     @Getter(lombok.AccessLevel.NONE)
     private final List<Property<?>> properties = new ArrayList<>();
     @Getter(lombok.AccessLevel.NONE)
@@ -108,11 +108,12 @@ public final class BisqEasyTradeReadModel {
 
     void publish(BisqEasyTradeSnapshot next) {
         Objects.requireNonNull(next);
-        synchronized (publicationLock) {
+        synchronized (notifications) {
             BisqEasyTradeSnapshot previous = snapshot;
             snapshot = next;
             properties.forEach(property -> property.publish(previous, next));
         }
+        notifications.drain();
     }
 
     public ReadOnlyObservable<BisqEasyTradeSnapshot> snapshotObservable() {
@@ -312,7 +313,7 @@ public final class BisqEasyTradeReadModel {
 
     private final class Property<T> implements ReadOnlyObservable<T> {
         private final Function<BisqEasyTradeSnapshot, T> select;
-        private final Set<Consumer<T>> observers = new LinkedHashSet<>();
+        private final Map<Consumer<T>, Registration> observers = new LinkedHashMap<>();
 
         private Property(Function<BisqEasyTradeSnapshot, T> select) {
             this.select = select;
@@ -325,32 +326,57 @@ public final class BisqEasyTradeReadModel {
 
         @Override
         public Pin addObserver(Consumer<T> observer) {
-            synchronized (publicationLock) {
-                observers.add(observer);
-                notifyObserver(observer, get());
+            Registration registration;
+            synchronized (notifications) {
+                registration = observers.computeIfAbsent(observer, Registration::new);
+                T initial = select.apply(snapshot);
+                notifications.enqueue(() -> registration.notifyValue(initial));
             }
-            return () -> removeObserver(observer);
+            notifications.drain();
+            return () -> removeRegistration(registration);
         }
 
         @Override
         public void removeObserver(Consumer<T> observer) {
-            synchronized (publicationLock) {
-                observers.remove(observer);
+            synchronized (notifications) {
+                Registration registration = observers.remove(observer);
+                if (registration != null) {
+                    registration.active = false;
+                }
+            }
+        }
+
+        private void removeRegistration(Registration registration) {
+            synchronized (notifications) {
+                registration.active = false;
+                observers.remove(registration.observer, registration);
             }
         }
 
         private void publish(BisqEasyTradeSnapshot previous, BisqEasyTradeSnapshot next) {
             T value = select.apply(next);
             if (!Objects.equals(select.apply(previous), value)) {
-                List.copyOf(observers).forEach(observer -> notifyObserver(observer, value));
+                List<Registration> recipients = List.copyOf(observers.values());
+                notifications.enqueue(() -> recipients.forEach(registration -> registration.notifyValue(value)));
             }
         }
 
-        private void notifyObserver(Consumer<T> observer, T value) {
-            try {
-                observer.accept(value);
-            } catch (Exception exception) {
-                log.error("Trade observer failed for trade {}", id, exception);
+        private final class Registration {
+            private final Consumer<T> observer;
+            private volatile boolean active = true;
+
+            private Registration(Consumer<T> observer) {
+                this.observer = observer;
+            }
+
+            private void notifyValue(T value) {
+                if (active) {
+                    try {
+                        observer.accept(value);
+                    } catch (Exception exception) {
+                        log.error("Trade observer failed for trade {}: {}", id, exception.getClass().getSimpleName());
+                    }
+                }
             }
         }
     }

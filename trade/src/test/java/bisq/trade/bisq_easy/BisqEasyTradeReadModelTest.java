@@ -18,6 +18,7 @@
 package bisq.trade.bisq_easy;
 
 import bisq.common.observable.Pin;
+import bisq.common.observable.collection.CollectionObserver;
 import bisq.contract.Role;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.identity.Identity;
@@ -32,7 +33,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.QUOTE_AMOUNT;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.contract;
@@ -40,9 +41,53 @@ import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.offer;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.sellerAsMakerTrade;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class BisqEasyTradeReadModelTest {
+    @Test
+    void propertyAndCollectionCallbacksCanSubscribeToEachOtherWithoutHoldingPublicationLocks() throws Exception {
+        BisqEasyTradeReadModel readModel = new BisqEasyTradeReadModel(trade());
+        BisqEasyPublishedSet<BisqEasyTradeReadModel> trades = new BisqEasyPublishedSet<>();
+        CountDownLatch propertyCallbackEntered = new CountDownLatch(1);
+        CountDownLatch collectionCallbackEntered = new CountDownLatch(1);
+        AtomicBoolean nestedPropertyCallbackReceived = new AtomicBoolean();
+        trades.addObserver(new CollectionObserver<>() {
+            @Override
+            public void onAdded(BisqEasyTradeReadModel trade) {
+                collectionCallbackEntered.countDown();
+                trade.tradeStateObservable().addObserver(state -> nestedPropertyCallbackReceived.set(true));
+            }
+
+            @Override
+            public void onRemoved(Object element) {
+            }
+
+            @Override
+            public void onCleared() {
+            }
+        });
+        try (var executor = Executors.newFixedThreadPool(3)) {
+            var subscription = executor.submit(() -> readModel.tradeStateObservable().addObserver(state -> {
+                propertyCallbackEntered.countDown();
+                try {
+                    assertThat(collectionCallbackEntered.await(5, TimeUnit.SECONDS)).isTrue();
+                    // The timeout releases this callback even on the old lock inversion, so all threads can finish.
+                    executor.submit(() -> trades.addObserver(() -> {})).get(1, TimeUnit.SECONDS).unbind();
+                } catch (Exception exception) {
+                    throw new AssertionError("Cross-subscription must not wait for an external callback", exception);
+                }
+            }));
+            assertThat(propertyCallbackEntered.await(5, TimeUnit.SECONDS)).isTrue();
+            var publication = executor.submit(() -> trades.publish(List.of(readModel)));
+            try {
+                subscription.get(5, TimeUnit.SECONDS).unbind();
+                publication.get(5, TimeUnit.SECONDS);
+            } finally {
+                collectionCallbackEntered.countDown();
+            }
+        }
+        assertThat(nestedPropertyCallbackReceived).isTrue();
+    }
+
     @Test
     void mutableTradeChangesAreVisibleOnlyAfterPublishingACompleteSnapshot() throws Exception {
         BisqEasyTrade trade = trade();
@@ -119,17 +164,53 @@ class BisqEasyTradeReadModelTest {
                 var publication = executor.submit(() -> {
                     publishingStarted.countDown();
                     readModel.publish(snapshot(BisqEasyTradeState.CANCELLED, "account"));
+                    readModel.publish(snapshot(BisqEasyTradeState.FAILED, "redacted"));
                 });
                 assertThat(publishingStarted.await(5, TimeUnit.SECONDS)).isTrue();
-                assertThrows(TimeoutException.class, () -> publication.get(100, TimeUnit.MILLISECONDS));
-                finishInitialObservation.countDown();
                 publication.get(5, TimeUnit.SECONDS);
+                assertThat(readModel.getTradeState()).isEqualTo(BisqEasyTradeState.FAILED);
+                assertThat(observed).containsExactly(BisqEasyTradeState.INIT);
+                finishInitialObservation.countDown();
                 subscription.get(5, TimeUnit.SECONDS).unbind();
             } finally {
                 finishInitialObservation.countDown();
             }
         }
-        assertThat(observed).containsExactly(BisqEasyTradeState.INIT, BisqEasyTradeState.CANCELLED);
+        assertThat(observed).containsExactly(BisqEasyTradeState.INIT, BisqEasyTradeState.CANCELLED, BisqEasyTradeState.FAILED);
+    }
+
+    @Test
+    void delayedSubscriptionsKeepTheirCapturedInitialValueAndUnboundSubscribersStayDetached() throws Exception {
+        BisqEasyTradeReadModel readModel = new BisqEasyTradeReadModel(trade());
+        CountDownLatch callbackEntered = new CountDownLatch(1);
+        CountDownLatch finishCallback = new CountDownLatch(1);
+        readModel.snapshotObservable().addObserver(snapshot -> {
+            if (snapshot.tradeState() == BisqEasyTradeState.CANCELLED) {
+                callbackEntered.countDown();
+                try {
+                    assertThat(finishCallback.await(5, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException exception) {
+                    throw new AssertionError(exception);
+                }
+            }
+        });
+        List<BisqEasyTradeState> detached = new ArrayList<>();
+        Pin detachedPin = readModel.tradeStateObservable().addObserver(detached::add);
+        List<BisqEasyTradeState> observed = new ArrayList<>();
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var publication = executor.submit(() -> readModel.publish(snapshot(BisqEasyTradeState.CANCELLED, "account")));
+            try {
+                assertThat(callbackEntered.await(5, TimeUnit.SECONDS)).isTrue();
+                readModel.tradeStateObservable().addObserver(observed::add);
+                readModel.publish(snapshot(BisqEasyTradeState.FAILED, "redacted"));
+                detachedPin.unbind();
+            } finally {
+                finishCallback.countDown();
+            }
+            publication.get(5, TimeUnit.SECONDS);
+        }
+        assertThat(observed).containsExactly(BisqEasyTradeState.CANCELLED, BisqEasyTradeState.FAILED);
+        assertThat(detached).containsExactly(BisqEasyTradeState.INIT);
     }
 
     @Test
