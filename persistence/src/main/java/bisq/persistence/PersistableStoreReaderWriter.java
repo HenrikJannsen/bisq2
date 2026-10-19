@@ -33,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -87,9 +88,17 @@ public class PersistableStoreReaderWriter<T extends PersistableStore<T>> {
      * wrapped in an {@link IllegalStateException}.
      */
     public synchronized void write(T persistableStore) {
+        write(persistableStore::toAny);
+    }
+
+    public synchronized void writeSnapshot(Any snapshot) {
+        write(() -> snapshot);
+    }
+
+    private void write(Supplier<Any> snapshotSupplier) {
         storeFileManager.createParentDirectoriesIfNotExisting();
         try {
-            writeStoreToTempFilePath(persistableStore);
+            writeStoreToTempFilePath(snapshotSupplier);
             // The backup copies the current file, so the current file stays in place until the rename replaces it
             storeFileManager.maybeBackup();
             storeFileManager.replaceCurrentFileWithTempFile();
@@ -197,17 +206,17 @@ public class PersistableStoreReaderWriter<T extends PersistableStore<T>> {
         }
     }
 
-    private void writeStoreToTempFilePath(T persistableStore) {
+    private void writeStoreToTempFilePath(Supplier<Any> snapshotSupplier) {
         Path tempFilePath = storeFileManager.getTempFilePath();
-        writeStoreToFilePath(persistableStore, tempFilePath);
+        writeStoreToFilePath(snapshotSupplier, tempFilePath);
     }
 
-    private void writeStoreToFilePath(T persistableStore, Path filePath) {
+    private void writeStoreToFilePath(Supplier<Any> snapshotSupplier, Path filePath) {
         try (OutputStream fileOutputStream = FileMutatorUtils.newOutputStream(filePath)) {
             // We use an Any container (byte blob) as we do not have the dependencies to the
             // external PersistableStore implementations (at deserialization we would have an issue otherwise as
             // it requires static access).
-            Any any = persistableStore.toAny();
+            Any any = snapshotSupplier.get();
             any.writeDelimitedTo(fileOutputStream);
         } catch (IOException e) {
             throw new CouldNotSerializePersistableStore(e);

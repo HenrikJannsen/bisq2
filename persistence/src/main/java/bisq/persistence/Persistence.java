@@ -23,6 +23,7 @@ import bisq.common.util.StringUtils;
 import bisq.persistence.backup.BackupFileInfo;
 import bisq.persistence.backup.MaxBackupSize;
 import bisq.persistence.backup.RestoreService;
+import com.google.protobuf.Any;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -77,9 +78,18 @@ public class Persistence<T extends PersistableStore<T>> {
         return CompletableFuture.runAsync(() -> persist(serializable), EXECUTOR);
     }
 
+    /** Writes an already captured immutable store snapshot on the same writer as ordinary store writes. */
+    public CompletableFuture<Void> persistSnapshotAsync(Any snapshot) {
+        return CompletableFuture.runAsync(() -> write(() -> persistableStoreReaderWriter.writeSnapshot(snapshot)), EXECUTOR);
+    }
+
     protected void persist(T persistableStore) {
+        write(() -> persistableStoreReaderWriter.write(persistableStore));
+    }
+
+    private void write(Runnable writeStore) {
         try {
-            persistableStoreReaderWriter.write(persistableStore);
+            writeStore.run();
         } catch (RuntimeException e) {
             // The persistence clients turn a failed write into the result false and drop the cause, and most callers
             // ignore the result. So the failure is logged here, with the store path. A file system error names a path
