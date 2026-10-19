@@ -554,26 +554,30 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         return persistableStore.getClosedTrades();
     }
 
-    public void closeTrade(BisqEasyTrade trade, UserProfile myUserProfile, UserProfile peerUserProfile) {
-        persistableStore.getTrades().remove(trade);
-        BisqEasyClosedTrade bisqEasyClosedTrade = new BisqEasyClosedTrade(trade, myUserProfile, peerUserProfile);
-        persistableStore.getClosedTrades().add(bisqEasyClosedTrade);
+    public CompletableFuture<Void> closeTrade(BisqEasyTrade trade, UserProfile myUserProfile, UserProfile peerUserProfile) {
+        return submitTradeTask(trade.getId(), () -> {
+            persistableStore.getTrades().remove(trade);
+            BisqEasyClosedTrade bisqEasyClosedTrade = new BisqEasyClosedTrade(trade, myUserProfile, peerUserProfile);
+            persistableStore.getClosedTrades().add(bisqEasyClosedTrade);
 
-        tradeProtocolById.remove(trade.getId());
-        persist();
+            tradeProtocolById.remove(trade.getId());
+            persist();
+        });
     }
 
-    public void deleteTrade(BisqEasyTrade trade) {
-        Set<BisqEasyClosedTrade> closedTrades = persistableStore.getClosedTrades();
-        Optional<BisqEasyClosedTrade> closedTrade = closedTrades.stream()
-                .filter(ct -> ct.trade().getId().equals(trade.getId()))
-                .findFirst();
-        if (closedTrade.isPresent()) {
-            closedTrades.remove(closedTrade.get());
-            persist();
-        } else {
-            log.warn("Could not delete trade {}", trade.getId());
-        }
+    public CompletableFuture<Void> deleteTrade(BisqEasyTrade trade) {
+        return submitTradeTask(trade.getId(), () -> {
+            Set<BisqEasyClosedTrade> closedTrades = persistableStore.getClosedTrades();
+            Optional<BisqEasyClosedTrade> closedTrade = closedTrades.stream()
+                    .filter(ct -> ct.trade().getId().equals(trade.getId()))
+                    .findFirst();
+            if (closedTrade.isPresent()) {
+                closedTrades.remove(closedTrade.get());
+                persist();
+            } else {
+                log.warn("Could not delete trade {}", trade.getId());
+            }
+        });
     }
 
 
@@ -757,6 +761,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     // Redact sensible data
     /* --------------------------------------------------------------------- */
 
+    // Changes the data of a trade, so each redaction runs as a task of its trade
     private void maybeRedactDataOfCompletedTrades() {
         int numDays = settingsService.getNumDaysAfterRedactingTradeData().get();
         long redactDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(numDays);
@@ -765,23 +770,26 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         int numDaysForNotCompletedTrades = Math.max(45, Math.min(90, numDays));
         long redactDateForNotCompletedTrades = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(numDaysForNotCompletedTrades);
         String redactedMarker = Res.get("data.redacted");
-        long numChanges = getAllTrades().stream()
-                .filter(trade -> {
-                    if (trade.getPaymentAccountData().map(data -> StringUtils.isEmpty(data) || data.equals(redactedMarker)).orElse(true)) {
-                        return false;
-                    }
-                    boolean doRedaction = trade.getTradeCompletedDate().map(date -> date < redactDate)
-                            .orElseGet(() -> trade.getContract().getTakeOfferDate() < redactDateForNotCompletedTrades);
-                    if (doRedaction) {
-
+        getAllTrades().stream()
+                .filter(trade -> isDataToRedact(trade, redactDate, redactDateForNotCompletedTrades, redactedMarker))
+                .forEach(trade -> runTradeTask(trade.getId(), () -> {
+                    // The trade can have changed since the check above
+                    if (isDataToRedact(trade, redactDate, redactDateForNotCompletedTrades, redactedMarker)) {
                         trade.setPaymentAccountData(Optional.of(redactedMarker));
+                        persist();
                     }
-                    return doRedaction;
-                })
-                .count();
-        if (numChanges > 0) {
-            persist();
+                }));
+    }
+
+    private static boolean isDataToRedact(BisqEasyTrade trade,
+                                          long redactDate,
+                                          long redactDateForNotCompletedTrades,
+                                          String redactedMarker) {
+        if (trade.getPaymentAccountData().map(data -> StringUtils.isEmpty(data) || data.equals(redactedMarker)).orElse(true)) {
+            return false;
         }
+        return trade.getTradeCompletedDate().map(date -> date < redactDate)
+                .orElseGet(() -> trade.getContract().getTakeOfferDate() < redactDateForNotCompletedTrades);
     }
 
 

@@ -29,6 +29,7 @@ import bisq.common.market.MarketRepository;
 import bisq.common.observable.Observable;
 import bisq.common.util.StringUtils;
 import bisq.contract.bisq_easy.BisqEasyContract;
+import bisq.i18n.Res;
 import bisq.identity.Identity;
 import bisq.network.NetworkService;
 import bisq.network.SendMessageResult;
@@ -39,6 +40,7 @@ import bisq.offer.amount.spec.QuoteSideFixedAmountSpec;
 import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.offer.price.spec.MarketPriceSpec;
 import bisq.trade.ServiceProvider;
+import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
 import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyAccountDataMessage;
@@ -71,6 +73,7 @@ import static bisq.trade.bisq_easy.BisqEasyTakeOfferRequestTestFixtures.takeOffe
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.QUOTE_AMOUNT;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.contract;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
+import static bisq.trade.bisq_easy.BisqEasyTradeTestData.userProfile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -188,8 +191,7 @@ class BisqEasyTradeServiceTradeTasksTest {
     // The network layer passes the messages which it received before the subscription to the new listener
     @Test
     void messageWhichTheNetworkReplaysAtTheSubscriptionReachesTheProtocolOfItsStoredTrade() throws Exception {
-        BisqEasyTrade storedTrade = new BisqEasyTrade(contract, true, false, buyerIdentity, offer,
-                sellerIdentity.getNetworkId(), buyerIdentity.getNetworkId());
+        BisqEasyTrade storedTrade = makersTrade();
         BisqEasyReportErrorMessage errorReport = new BisqEasyReportErrorMessage(StringUtils.createUid(),
                 tradeId,
                 BisqEasyProtocol.VERSION,
@@ -208,6 +210,38 @@ class BisqEasyTradeServiceTradeTasksTest {
         service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
 
         assertThat(storedTrade.getTradeState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
+    }
+
+    @Test
+    void closingATradeRunsAsTaskOfTheTrade() throws Exception {
+        BisqEasyTrade storedTrade = makersTrade();
+        startService(storedTrade);
+
+        service.closeTrade(storedTrade, userProfile(buyerIdentity.getNetworkId()), userProfile(sellerIdentity.getNetworkId()))
+                .get(10, TimeUnit.SECONDS);
+
+        assertThat(service.findProtocol(tradeId)).isEmpty();
+        assertThat(service.getClosedTrades()).extracting(BisqEasyClosedTrade::trade).containsExactly(storedTrade);
+    }
+
+    @Test
+    void accountDataOfAnOldCompletedTradeIsRedactedInATaskOfTheTrade() throws Exception {
+        BisqEasyTrade storedTrade = makersTrade();
+        storedTrade.setPaymentAccountData(Optional.of(ACCOUNT_DATA));
+        storedTrade.setTradeCompletedDate(Optional.of(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(31)));
+        when(serviceProvider.getSettingsService().getNumDaysAfterRedactingTradeData()).thenReturn(new Observable<>(30));
+        // The redaction marker is a localized text
+        Res.setAndApplyLanguageTag("en");
+
+        startService(storedTrade);
+        service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
+
+        assertThat(storedTrade.getPaymentAccountData()).contains(Res.get("data.redacted"));
+    }
+
+    private BisqEasyTrade makersTrade() {
+        return new BisqEasyTrade(contract, true, false, buyerIdentity, offer,
+                sellerIdentity.getNetworkId(), buyerIdentity.getNetworkId());
     }
 
     private void startService(BisqEasyTrade... storedTrades) {

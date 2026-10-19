@@ -29,6 +29,8 @@ the trade stopped. Locks in single places did not cover all such combinations.
    offer, rejecting or cancelling a trade, and confirming the Bitcoin payment. The taker creates its trade and the
    protocol in a task of the new trade. The call checks the trade restrictions and the data of the action, and returns
    a future of the task.
+10. Closing a trade, deleting a closed trade and redacting the payment account data of a trade run as tasks of the
+    trade.
 
 ## Reasons
 
@@ -58,3 +60,5 @@ the trade stopped. Locks in single places did not cover all such combinations.
   waits for it. The UI thread does not wait for the trade. Before, a click on the desktop could wait for a message
   handler of the same trade, for example while it sent a message to the peer. A restriction and invalid data are
   reported by the call, so the user gets the error before the action is submitted.
+- Rule 10: closing removes the protocol, and a message or an action which runs at the same time could still change the
+  trade. The redaction runs from a timer and changes the data of open and closed trades.
