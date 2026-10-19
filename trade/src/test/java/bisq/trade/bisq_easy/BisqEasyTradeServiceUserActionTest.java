@@ -58,7 +58,7 @@ class BisqEasyTradeServiceUserActionTest {
 
     @BeforeEach
     void setUp() {
-        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP, Runnable::run);
         // I am the taker and the buyer. The peer is the maker.
         BisqEasyContract contract = mock(BisqEasyContract.class);
         when(contract.getTakeOfferDate()).thenReturn(0L);

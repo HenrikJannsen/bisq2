@@ -25,10 +25,12 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Trade messages which arrived before the protocol of their trade existed. The trade service processes them again
- * when it processes the next message of a trade.
+ * Trade messages which arrived before the protocol of their trade existed. The Bisq Easy trade service processes
+ * the messages of a trade when it creates the protocol of the trade. The MuSig trade service processes them again when
+ * it processes the next message of a trade (docs/specifications/trade/pending-trade-messages.md).
  * <p>
  * Anybody can send a trade message with a made-up trade ID. Such a message never gets a protocol, so it would stay
  * in memory until the node restarts. The number of kept messages is therefore bounded by {@link #MAX_PENDING_MESSAGES}.
@@ -80,5 +82,14 @@ public class PendingTradeMessages<M extends TradeMessage> {
      */
     public synchronized List<M> getMessagesInArrivalOrder() {
         return new ArrayList<>(messages);
+    }
+
+    /**
+     * A copy of the pending messages of the trade, in arrival order.
+     */
+    public synchronized List<M> getMessagesOfTrade(String tradeId) {
+        return messages.stream()
+                .filter(message -> message.getTradeId().equals(tradeId))
+                .collect(Collectors.toList());
     }
 }

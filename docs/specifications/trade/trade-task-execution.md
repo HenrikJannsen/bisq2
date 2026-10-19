@@ -19,6 +19,8 @@ the trade stopped. Locks in single places did not cover all such combinations.
 3. A task which fails completes its result with the failure. The next task of the trade still runs.
 4. A task does not wait for the result of another task of its trade.
 5. At shutdown, the node refuses new tasks and waits for the queued tasks for a limited time.
+6. A received trade message runs as a task of the trade whose ID it carries, also when the node has no trade with that
+   ID. The take offer request runs as a task of the trade which it creates.
 
 ## Reasons
 
@@ -31,3 +33,11 @@ the trade stopped. Locks in single places did not cover all such combinations.
   the peer.
 - Rule 4: the task for which it waits runs only after it, so both would wait forever.
 - Rule 5: a task which is cut off at shutdown can leave a trade change which is not persisted.
+- Rule 6: a trade message can arrive before the take offer request which creates its trade, or at the same time. The
+  node keeps such a message as pending message until the protocol of its trade exists (see
+  [Pending trade messages](pending-trade-messages.md)). Before this rule, a message which the node processed at the
+  same time as the request could look for the protocol before the request created it, and add itself to the pending
+  messages after the request had processed them. The message then stayed pending. When the seller took a buy offer
+  and sent the payment account data right away, the buyer waited for the account data and the seller for the payment,
+  and the trade stopped. Two copies of a take offer request also run one after the other, so the second one finds the
+  trade which the first one created.

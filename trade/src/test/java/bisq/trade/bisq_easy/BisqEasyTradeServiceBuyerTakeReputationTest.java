@@ -83,7 +83,7 @@ class BisqEasyTradeServiceBuyerTakeReputationTest {
         reputationService = mock(ReputationService.class);
         when(reputationService.getReputationScore(any(String.class))).thenReturn(new ReputationScore(0, 0, 0));
         when(serviceProvider.getUserService().getReputationService()).thenReturn(reputationService);
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
     }
 
     @Test

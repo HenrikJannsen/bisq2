@@ -29,7 +29,6 @@ import bisq.security.keys.PubKey;
 import bisq.trade.ServiceProvider;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyAccountDataMessage;
-import bisq.trade.bisq_easy.protocol.messages.BisqEasyConfirmFiatReceiptMessage;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyReportErrorMessage;
 import bisq.trade.exceptions.TradeProtocolFailure;
 import bisq.trade.protocol.messages.PendingTradeMessages;
@@ -79,7 +78,7 @@ class BisqEasyTradeServiceLoggingTest {
         serviceLogger.addAppender(appender);
         pendingMessagesLogger.addAppender(appender);
 
-        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP, Runnable::run);
         // I am the taker and the buyer. The peer is the maker and the seller.
         BisqEasyContract contract = mock(BisqEasyContract.class);
         when(contract.getTakeOfferDate()).thenReturn(0L);
@@ -98,15 +97,14 @@ class BisqEasyTradeServiceLoggingTest {
 
     @Test
     void logOfAKeptAndLaterProcessedMessageNamesOnlyTypeAndTradeId() {
-        // The account data message arrives before the trade exists, and it is processed when the next message of
-        // the peer arrives
+        // The account data message arrives before the trade exists, and it is processed when the protocol of the trade
+        // is created
         service.onMessage(accountDataMessage());
         startServiceWithTrade();
-        service.onMessage(new BisqEasyConfirmFiatReceiptMessage("message-of-peer", trade.getId(), "1.0.0", peer, me));
         assertThat(trade.getEventQueue()).contains(accountDataMessage());
 
         assertThat(loggedLines()).anyMatch(line -> line.contains("add the message of type BisqEasyAccountDataMessage"));
-        assertThat(loggedLines()).anyMatch(line -> line.contains("remove the message of type BisqEasyAccountDataMessage"));
+        assertThat(loggedLines()).anyMatch(line -> line.contains("process the pending message of type BisqEasyAccountDataMessage"));
         assertThat(loggedLines()).noneMatch(line -> line.contains(PAYMENT_ACCOUNT_DATA));
     }
 

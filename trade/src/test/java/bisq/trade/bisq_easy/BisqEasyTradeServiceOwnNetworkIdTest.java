@@ -61,7 +61,7 @@ class BisqEasyTradeServiceOwnNetworkIdTest {
     @BeforeEach
     void setUp() {
         serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
     }
 
     @AfterEach

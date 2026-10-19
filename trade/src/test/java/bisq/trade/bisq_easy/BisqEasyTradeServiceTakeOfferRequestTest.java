@@ -114,7 +114,7 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         when(serviceProvider.getSettingsService().getMaxTradePriceDeviation()).thenReturn(new Observable<>(0.05));
         when(serviceProvider.getSettingsService().getCloseMyOfferWhenTaken()).thenReturn(new Observable<>(false));
 
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
         // As in the application, the protocol and its handlers get this service from the service provider.
         when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
         service.initialize().join();

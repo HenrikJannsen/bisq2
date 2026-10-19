@@ -84,7 +84,7 @@ class BisqEasyTradeServiceChatChannelBindingTest {
         when(channelService.findChannelByTradeId(anyString())).thenAnswer(invocation -> channels.stream()
                 .filter(channel -> channel.getTradeId().equals(invocation.getArgument(0)))
                 .findAny());
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
 
         makerIdentity = identity("maker");
         makerNetworkId = makerIdentity.getNetworkId();

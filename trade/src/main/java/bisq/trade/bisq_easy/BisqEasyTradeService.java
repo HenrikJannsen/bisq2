@@ -31,6 +31,7 @@ import bisq.common.observable.Pin;
 import bisq.common.observable.collection.CollectionObserver;
 import bisq.common.observable.collection.ReadOnlyObservableSet;
 import bisq.common.platform.Version;
+import bisq.common.threading.ExecutorFactory;
 import bisq.common.timer.Scheduler;
 import bisq.common.util.ExceptionUtil;
 import bisq.common.util.StringUtils;
@@ -51,6 +52,7 @@ import bisq.settings.SettingsService;
 import bisq.trade.ServiceProvider;
 import bisq.trade.TradeActionNotAppliedException;
 import bisq.trade.TradeRestrictedException;
+import bisq.trade.TradeTaskExecutor;
 import bisq.trade.bisq_easy.protocol.BisqEasyBuyerAsMakerProtocol;
 import bisq.trade.bisq_easy.protocol.BisqEasyBuyerAsTakerProtocol;
 import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
@@ -84,6 +86,7 @@ import bisq.user.contact_list.ContactListService;
 import bisq.user.contact_list.ContactReason;
 import bisq.user.profile.UserProfile;
 import bisq.user.profile.UserProfileService;
+import com.google.common.annotations.VisibleForTesting;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -94,6 +97,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -107,6 +113,11 @@ import static com.google.common.base.Preconditions.checkArgument;
 @Slf4j
 @Getter
 public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyTradeStore> implements Service, ConfidentialMessageService.Listener {
+    // Tasks of different trades can run at the same time. A task of a trade which waits for the network does not stop
+    // the tasks of the other trades.
+    private static final int NUM_TRADE_TASK_THREADS = 4;
+    private static final long TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC = 10;
+
     private final ServiceProvider serviceProvider;
     private final NetworkService networkService;
     private final IdentityService identityService;
@@ -131,12 +142,21 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     @Nullable
     private Scheduler numDaysAfterRedactingTradeDataScheduler;
     private final PendingTradeMessages<BisqEasyTradeMessage> pendingMessages = new PendingTradeMessages<>();
-    // The network layer delivers messages on several threads. The lock makes the check for an existing trade and the
-    // adding of a new trade of a take offer request one step.
+    // Runs the operations of each trade one after the other (docs/specifications/trade/trade-task-execution.md)
     @Getter(AccessLevel.NONE)
-    private final Object tradeCreationLock = new Object();
+    private final Executor tradeTaskThreads;
+    @Getter(AccessLevel.NONE)
+    private final TradeTaskExecutor tradeTaskExecutor;
 
     public BisqEasyTradeService(ServiceProvider serviceProvider, AppType appType) {
+        this(serviceProvider, appType, ExecutorFactory.newFixedThreadPool("BisqEasyTradeTask", NUM_TRADE_TASK_THREADS));
+    }
+
+    // Tests pass an executor which runs the tasks in the calling thread
+    @VisibleForTesting
+    BisqEasyTradeService(ServiceProvider serviceProvider, AppType appType, Executor tradeTaskThreads) {
+        this.tradeTaskThreads = tradeTaskThreads;
+        tradeTaskExecutor = new TradeTaskExecutor(tradeTaskThreads);
         this.serviceProvider = serviceProvider;
         networkService = serviceProvider.getNetworkService();
         identityService = serviceProvider.getIdentityService();
@@ -165,7 +185,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                                 trade.getMyself().getNetworkId().getId().equals(receiverUserProfileId))
                         .isPresent());
 
-        persistableStore.getTrades().forEach(this::createAndAddTradeProtocol);
+        persistableStore.getTrades().forEach(trade -> processPendingMessages(createAndAddTradeProtocol(trade)));
 
         // Checks all existing channels against their trades, and later a channel which appears for an existing
         // trade. A trade which appears for an existing channel is checked when its protocol gets created.
@@ -218,6 +238,14 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         }
 
         networkService.removeConfidentialMessageListener(this);
+
+        // The tasks which were submitted before still run, so their changes reach the store before it gets persisted
+        if (!tradeTaskExecutor.shutdown(TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC, TimeUnit.SECONDS)) {
+            log.warn("Not all trade tasks completed within {} seconds at shutdown", TRADE_TASKS_SHUTDOWN_TIMEOUT_SEC);
+        }
+        if (tradeTaskThreads instanceof ExecutorService executorService) {
+            ExecutorFactory.shutdownAndAwaitTermination(executorService);
+        }
         return CompletableFuture.completedFuture(true);
     }
 
@@ -226,10 +254,13 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     // ConfidentialMessageService.Listener
     /* --------------------------------------------------------------------- */
 
+    // A message runs as task of the trade whose ID it carries, also if we have no trade with that ID yet. So a message
+    // which arrives while the take offer request creates the trade waits for the request, and the request processes
+    // it as pending message (docs/specifications/trade/pending-trade-messages.md).
     @Override
     public void onMessage(EnvelopePayloadMessage envelopePayloadMessage) {
         if (envelopePayloadMessage instanceof BisqEasyTradeMessage bisqEasyTradeMessage) {
-            processTradeMessage(bisqEasyTradeMessage);
+            runTradeTask(bisqEasyTradeMessage.getTradeId(), () -> processTradeMessage(bisqEasyTradeMessage));
         }
     }
 
@@ -259,8 +290,13 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         }
     }
 
+    // The pending messages of the new trade arrived before the request, or while it waited for its task. We process them
+    // after the request, so the protocol has the state in which the maker answered the request.
     private void handleBisqEasyTakeOfferMessage(BisqEasyTakeOfferRequest message) {
-        makerCreatesProtocol(message).ifPresent(protocol -> handleBisqEasyTradeMessage(message, protocol));
+        makerCreatesProtocol(message).ifPresent(protocol -> {
+            handleBisqEasyTradeMessage(message, protocol);
+            processPendingMessages(protocol);
+        });
     }
 
     private void handleBisqEasyTradeMessage(BisqEasyTradeMessage message) {
@@ -268,17 +304,29 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         findProtocol(tradeId).ifPresentOrElse(protocol -> {
                     if (isMessageOfTradePeer(message, protocol)) {
                         handleBisqEasyTradeMessage(message, protocol);
-                    } else {
-                        pendingMessages.remove(message);
                     }
                 },
                 () -> {
                     // Trade messages carry private data of the traders, so the log names only the message type.
                     log.info("Protocol with tradeId {} not found. We add the message of type {} to pendingMessages " +
-                                    "for re-processing when the next message arrives.",
+                                    "for processing when the protocol of the trade is created.",
                             StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
                     pendingMessages.add(message);
                 });
+    }
+
+    // Runs right after the protocol of the trade was created, before a later message of the trade is processed. A maker
+    // runs it after the take offer request.
+    private void processPendingMessages(BisqEasyProtocol protocol) {
+        String tradeId = protocol.getModel().getId();
+        pendingMessages.getMessagesOfTrade(tradeId).forEach(message -> {
+            pendingMessages.remove(message);
+            if (isMessageOfTradePeer(message, protocol)) {
+                log.info("We process the pending message of type {} with tradeId {}.",
+                        message.getClass().getSimpleName(), StringUtils.sanitizeForLog(tradeId));
+                handleBisqEasyTradeMessage(message, protocol);
+            }
+        });
     }
 
     // The state machine turns an exception of a message handler into a failure of the trade (Fsm.handle), and the
@@ -297,16 +345,6 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
 
     private void handleBisqEasyTradeMessage(BisqEasyTradeMessage message, BisqEasyProtocol protocol) {
         protocol.handle(message);
-
-        if (pendingMessages.remove(message)) {
-            log.info("We remove the message of type {} with tradeId {} from pendingMessages.",
-                    message.getClass().getSimpleName(), StringUtils.sanitizeForLog(message.getTradeId()));
-        }
-
-        if (!pendingMessages.isEmpty()) {
-            log.info("We have pendingMessages. We try to re-process them now.");
-            pendingMessages.getMessagesInArrivalOrder().forEach(this::handleBisqEasyTradeMessage);
-        }
     }
 
 
@@ -389,7 +427,9 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         maybeAddPeerToContactList(bisqEasyTrade.getMaker().getNetworkId().getId(),
                 bisqEasyTrade.getTaker().getNetworkId().getId());
 
-        return createAndAddTradeProtocol(bisqEasyTrade);
+        BisqEasyProtocol protocol = createAndAddTradeProtocol(bisqEasyTrade);
+        processPendingMessages(protocol);
+        return protocol;
     }
 
     public void takeOffer(BisqEasyTrade trade) {
@@ -554,22 +594,22 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                     message.getTradeId());
             return Optional.empty();
         }
-        synchronized (tradeCreationLock) {
-            if (findProtocol(tradeId).isPresent() || tradeExists(tradeId)) {
-                logDroppedTakeOfferRequest(message, "a trade with its trade ID exists already", tradeId);
-                return Optional.empty();
-            }
-            // Only after the check above: a rejection of a copy of a request which we have handled would fail the
-            // trade at the taker
-            try {
-                BisqEasyTakeOfferRequestValidator.validate(serviceProvider, myIdentity.get(), message);
-            } catch (RuntimeException e) {
-                log.warn("We reject the take offer request. tradeId={}", tradeId, e);
-                reportTakeOfferRejection(bisqEasyTrade, e);
-                return Optional.empty();
-            }
-            persistableStore.addTrade(bisqEasyTrade);
+        // The request runs as task of its trade ID, which is the ID of the trade (checked above). So a copy of the
+        // request runs after it, and finds the trade.
+        if (findProtocol(tradeId).isPresent() || tradeExists(tradeId)) {
+            logDroppedTakeOfferRequest(message, "a trade with its trade ID exists already", tradeId);
+            return Optional.empty();
         }
+        // Only after the check above: a rejection of a copy of a request which we have handled would fail the
+        // trade at the taker
+        try {
+            BisqEasyTakeOfferRequestValidator.validate(serviceProvider, myIdentity.get(), message);
+        } catch (RuntimeException e) {
+            log.warn("We reject the take offer request. tradeId={}", tradeId, e);
+            reportTakeOfferRejection(bisqEasyTrade, e);
+            return Optional.empty();
+        }
+        persistableStore.addTrade(bisqEasyTrade);
         persist();
 
         maybeAddPeerToContactList(sender.getId(), myIdentity.get().getId());
@@ -725,6 +765,30 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         if (numChanges > 0) {
             persist();
         }
+    }
+
+
+    /* --------------------------------------------------------------------- */
+    // Trade tasks
+    /* --------------------------------------------------------------------- */
+
+    // Completes when the tasks of the trade which were submitted before have run
+    @VisibleForTesting
+    CompletableFuture<Void> afterTasksOfTrade(String tradeId) {
+        return tradeTaskExecutor.submit(tradeId, () -> {
+        });
+    }
+
+    // For a task for which no caller waits. Without the log, its failure would not be visible.
+    private void runTradeTask(String tradeId, Runnable task) {
+        tradeTaskExecutor.submit(tradeId, task).whenComplete((nil, throwable) -> {
+            if (throwable instanceof RejectedExecutionException) {
+                log.info("We did not run a task of trade {} because the trade service is shut down",
+                        StringUtils.sanitizeForLog(tradeId));
+            } else if (throwable != null) {
+                log.error("A task of trade {} failed", StringUtils.sanitizeForLog(tradeId), throwable);
+            }
+        });
     }
 
 

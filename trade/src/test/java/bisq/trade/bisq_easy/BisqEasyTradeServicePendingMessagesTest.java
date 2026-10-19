@@ -45,8 +45,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * A trade message which arrives before its trade exists is kept and processed when the next message of the trade is
- * processed. The kept messages are bounded, because anybody can send trade messages with made-up trade IDs. When the
+ * A trade message which arrives before its trade exists is kept and processed when the protocol of its trade is
+ * created. The kept messages are bounded, because anybody can send trade messages with made-up trade IDs. When the
  * bound is exceeded, the oldest kept message is dropped.
  */
 class BisqEasyTradeServicePendingMessagesTest {
@@ -59,7 +59,7 @@ class BisqEasyTradeServicePendingMessagesTest {
 
     @BeforeEach
     void setUp() {
-        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+        service = new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP, Runnable::run);
         // I am the taker and the buyer. The peer is the maker.
         BisqEasyContract contract = mock(BisqEasyContract.class);
         when(contract.getTakeOfferDate()).thenReturn(0L);
@@ -74,16 +74,24 @@ class BisqEasyTradeServicePendingMessagesTest {
     }
 
     @Test
-    void messageOfTheTradePeerWhichArrivedBeforeTheTradeExistedIsProcessedLater() {
+    void messageOfTheTradePeerWhichArrivedBeforeTheTradeExistedIsProcessedWhenTheProtocolIsCreated() {
         // The error report of the peer arrives before the trade exists. It is the newest of the kept messages.
         sendMessagesWithUnknownTradeIds(MAX_PENDING_MESSAGES);
         service.onMessage(errorReport(peer));
+
         startServiceWithTrade();
 
-        // The next message of the peer makes the service process the kept messages again
-        service.onMessage(confirmFiatReceipt());
-
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
+    }
+
+    @Test
+    void messageOfAThirdPartyWhichArrivedBeforeTheTradeExistedIsDropped() {
+        service.onMessage(errorReport(thirdParty));
+
+        startServiceWithTrade();
+
+        assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
+        assertThat(trade.getEventQueue()).isEmpty();
     }
 
     @Test
@@ -92,6 +100,7 @@ class BisqEasyTradeServicePendingMessagesTest {
         service.onMessage(errorReport(peer));
         sendMessagesWithUnknownTradeIds(MAX_PENDING_MESSAGES);
         startServiceWithTrade();
+        assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
 
         service.onMessage(confirmFiatReceipt());
 
@@ -117,7 +126,6 @@ class BisqEasyTradeServicePendingMessagesTest {
         service.getPersistableStore().addTrade(trade);
         service.initialize().join();
         assertThat(service.findProtocol(trade.getId())).isPresent();
-        assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.INIT);
     }
 
     private BisqEasyConfirmFiatReceiptMessage confirmFiatReceipt() {

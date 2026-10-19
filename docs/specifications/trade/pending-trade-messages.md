@@ -10,14 +10,17 @@ responses of Bisq Easy trades, which arrive before the trade channel exists. The
 A node creates a trade when it takes an offer, or when it receives the take offer request of a taker. Trade messages
 travel through the mailbox of the network, and the mailbox does not keep the order of messages. So a trade message can
 arrive before the take offer request which creates its trade. The node keeps such a message as a pending message and
-processes it again when it processes the next message of a trade.
+processes it when the protocol of its trade exists.
 
 ## Rules
 
-1. A node keeps a trade message whose trade does not exist as a pending message. It processes the pending messages
-   again when it processes a trade message of an existing trade. A pending message which the node then passes to the
-   protocol of its trade is no longer pending. A pending message of an existing trade whose sender is not the trade
-   peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines.
+1. A node keeps a trade message whose trade does not exist as a pending message. A pending message which the node
+   passes to the protocol of its trade is no longer pending. A pending message of an existing trade whose sender is not
+   the trade peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines.
+   - Bisq Easy: when the node creates the protocol of a trade, it processes the pending messages of that trade in the
+     same task of the trade, in arrival order (see [Trade task execution](trade-task-execution.md)). A maker processes
+     them after the take offer request which created the trade.
+   - MuSig: the node processes the pending messages again when it processes a trade message of an existing trade.
 2. A node keeps at most 100 pending messages. When a message arrives while the node keeps 100 pending messages, the
    node drops the oldest pending message and keeps the new one. A message which is already pending does not change
    the number or the order of the pending messages.
@@ -44,6 +47,13 @@ processes it again when it processes the next message of a trade.
 
 ## Reasons
 
+- Rule 1, Bisq Easy: the processing of a pending message must not depend on a later message. Earlier, the node
+  processed the pending messages only when a trade message of an existing trade arrived. A message which became pending
+  after the take offer request had processed them waited for such a message. When the seller took a buy offer, no
+  further message came: the buyer waited for the account data, and the seller for the payment. All messages of a trade
+  run as tasks of that trade, so no message of the trade can become pending after its protocol was created.
+- Rule 1, maker: the maker answers the take offer request in the state in which the request finds the trade, as
+  without pending messages. The state machine accepts the data of the peer before and after the answer.
 - Rule 2: anybody can send trade messages with made-up trade IDs to a node. Such a message never gets a trade, so
   without a bound it stays in memory until the node restarts, and the memory of the node grows without limit. A node
   has only a few trades whose messages can arrive before the trade exists, so 100 pending messages leave room for all

@@ -75,7 +75,7 @@ class BisqEasyTradeServiceStartupReplayRestrictionTest {
             return null;
         }).when(networkService).subscribeToConfidentialMessages(any());
 
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
     }
 
     @AfterEach

@@ -100,7 +100,7 @@ class BisqEasyTradeServiceMakerVersionTest {
                 .thenReturn(Optional.of(usdMarketPrice));
         when(serviceProvider.getUserService().getReputationService().getReputationScore(any(String.class)))
                 .thenReturn(new ReputationScore(1_000_000, 5, 1));
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
         service.initialize();
         offer = offer("offer-id", identity("maker").getNetworkId(), QUOTE_AMOUNT);
     }

@@ -50,7 +50,7 @@ class BisqEasyTradeServiceTakeOfferTest {
     @Test
     void takersContractCarriesThePriceSpecOfTheOffer() {
         ServiceProvider serviceProvider = mock(ServiceProvider.class, RETURNS_DEEP_STUBS);
-        BisqEasyTradeService service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP);
+        BisqEasyTradeService service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, Runnable::run);
         FloatPriceSpec priceSpec = new FloatPriceSpec(0.02);
         BisqEasyOffer offer = offer("offer-id", identity("maker").getNetworkId(), QUOTE_AMOUNT, priceSpec);
         // The taker buys, so its node checks the reputation of the seller (bisq-easy-seller-reputation-limit.md)

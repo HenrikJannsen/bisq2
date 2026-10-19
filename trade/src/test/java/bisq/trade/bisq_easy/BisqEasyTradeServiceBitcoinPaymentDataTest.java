@@ -44,7 +44,7 @@ class BisqEasyTradeServiceBitcoinPaymentDataTest {
     private static final String ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
 
     private final BisqEasyTradeService service =
-            new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP);
+            new BisqEasyTradeService(mock(ServiceProvider.class, RETURNS_DEEP_STUBS), AppType.DESKTOP, Runnable::run);
     private final Identity buyerIdentity = identity("buyer");
     private final BisqEasyTrade trade = buyerAsTakerTrade(
             contract(offer("offer-id", identity("seller").getNetworkId(), QUOTE_AMOUNT), buyerIdentity.getNetworkId(),

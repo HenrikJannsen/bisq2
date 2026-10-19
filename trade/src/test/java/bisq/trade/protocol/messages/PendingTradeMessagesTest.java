@@ -96,13 +96,30 @@ class PendingTradeMessagesTest {
         assertThat(pendingMessages.isEmpty()).isTrue();
     }
 
+    @Test
+    void messagesOfATradeAreReturnedInArrivalOrder() {
+        BisqEasyTradeMessage first = message("first", "trade-1");
+        BisqEasyTradeMessage ofOtherTrade = message("other", "trade-2");
+        BisqEasyTradeMessage second = message("second", "trade-1");
+        pendingMessages.add(first);
+        pendingMessages.add(ofOtherTrade);
+        pendingMessages.add(second);
+
+        assertThat(pendingMessages.getMessagesOfTrade("trade-1")).containsExactly(first, second);
+        assertThat(pendingMessages.getMessagesOfTrade("unknown")).isEmpty();
+    }
+
     private List<BisqEasyTradeMessage> messages(int count) {
         return new ArrayList<>(IntStream.range(0, count).mapToObj(this::message).toList());
     }
 
     private BisqEasyTradeMessage message(int index) {
-        return new BisqEasyReportErrorMessage("message-" + index,
-                "trade-" + index,
+        return message("message-" + index, "trade-" + index);
+    }
+
+    private BisqEasyTradeMessage message(String id, String tradeId) {
+        return new BisqEasyReportErrorMessage(id,
+                tradeId,
                 "1.0.0",
                 sender,
                 receiver,
