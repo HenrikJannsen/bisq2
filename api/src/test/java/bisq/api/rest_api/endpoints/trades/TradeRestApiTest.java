@@ -268,6 +268,7 @@ class TradeRestApiTest {
                 userService,
                 supportService,
                 tradeService,
+                new bisq.bisq_easy.BisqEasyTradeActionService(openTradeChannelService),
                 mock(ClosedTradeItemsService.class));
     }
 

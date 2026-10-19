@@ -31,6 +31,7 @@ import bisq.api.rest_api.pagination.PaginatedResponse;
 import bisq.api.rest_api.pagination.PaginationParams;
 import bisq.api.rest_api.pagination.SortDirection;
 import bisq.api.web_socket.domain.ClosedTradeItemsService;
+import bisq.bisq_easy.BisqEasyTradeActionService;
 import bisq.bonded_roles.market_price.MarketPriceService;
 import bisq.chat.ChatChannelDomain;
 import bisq.chat.ChatChannelSelectionService;
@@ -103,6 +104,7 @@ public class TradeRestApi extends RestApiBase {
     private final BannedUserService bannedUserService;
     private final BisqEasyMediationRequestService bisqEasyMediationRequestService;
     private final BisqEasyTradeService bisqEasyTradeService;
+    private final BisqEasyTradeActionService tradeActionService;
     private final BisqEasyOpenTradeChannelService bisqEasyOpenTradeChannelService;
     private final LeavePrivateChatManager leavePrivateChatManager;
     private final ChatChannelSelectionService offerbookChannelSelectionService;
@@ -113,6 +115,7 @@ public class TradeRestApi extends RestApiBase {
                         UserService userService,
                         SupportService supportedService,
                         TradeService tradeService,
+                        BisqEasyTradeActionService tradeActionService,
                         ClosedTradeItemsService closedTradeItemsService) {
         this.bisqEasyOfferbookChannelService = chatService.getBisqEasyOfferbookChannelService();
         offerbookChannelSelectionService = chatService.getChatChannelSelectionService(ChatChannelDomain.BISQ_EASY_OFFERBOOK);
@@ -124,6 +127,7 @@ public class TradeRestApi extends RestApiBase {
         bisqEasyMediationRequestService = supportedService.getBisqEasyMediationRequestService();
         bisqEasyTradeService = tradeService.getBisqEasyTradeService();
         this.closedTradeItemsService = closedTradeItemsService;
+        this.tradeActionService = tradeActionService;
     }
 
     @GET
@@ -369,17 +373,19 @@ public class TradeRestApi extends RestApiBase {
     private void handleRejectTrade(BisqEasyOpenTradeChannel channel,
                                    BisqEasyTrade trade,
                                    String userName) throws Exception {
-        bisqEasyTradeService.rejectTrade(trade);
-        String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel).get();
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.rejectTrade(trade), channel, () -> {
+            String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
+            return encoded;
+        }).get();
     }
 
     private void handleCancelTrade(BisqEasyOpenTradeChannel channel,
                                    BisqEasyTrade trade,
                                    String userName) throws Exception {
-        bisqEasyTradeService.cancelTrade(trade);
-        String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel).get();
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.cancelTrade(trade), channel, () -> {
+            String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
+            return encoded;
+        }).get();
     }
 
     private void handleCloseTrade(BisqEasyOpenTradeChannel channel, BisqEasyTrade trade) throws Exception {
@@ -392,9 +398,10 @@ public class TradeRestApi extends RestApiBase {
                                                  TradeEventDto tradeEvent,
                                                  String userName) throws Exception {
         String paymentAccountData = checkNotNull(tradeEvent.data(), "paymentAccountData must not be null");
-        bisqEasyTradeService.sellerSendsPaymentAccount(trade, paymentAccountData);
-        String encoded = Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage", userName, paymentAccountData);
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerSendsPaymentAccount(trade, paymentAccountData), channel, () -> {
+            String encoded = Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage", userName, paymentAccountData);
+            return encoded;
+        });
     }
 
     private void handleBuyerSendBitcoinPaymentData(BisqEasyOpenTradeChannel channel,
@@ -405,29 +412,32 @@ public class TradeRestApi extends RestApiBase {
         String btcRailName = paymentRail.name();
         String key = "bisqEasy.tradeState.info.buyer.phase1a.tradeLogMessage." + btcRailName;
         String bitcoinPaymentData = checkNotNull(tradeEvent.data(), "bitcoinPaymentData must not be null");
-        bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData);
-        String encoded = Res.encode(key, userName, bitcoinPaymentData);
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData), channel, () -> {
+            String encoded = Res.encode(key, userName, bitcoinPaymentData);
+            return encoded;
+        });
     }
 
     private void handleSellerConfirmFiatReceipt(BisqEasyOpenTradeChannel channel,
                                                 BisqEasyTrade trade,
                                                 String userName) throws Exception {
-        bisqEasyTradeService.sellerConfirmFiatReceipt(trade);
-        long quoteSideAmount = trade.getContract().getQuoteSideAmount();
-        String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
-        String formattedQuoteAmount = AmountFormatter.formatQuoteAmountWithCode(Fiat.from(quoteSideAmount, quoteCurrencyCode));
-        String encoded = Res.encode("bisqEasy.tradeState.info.seller.phase2b.tradeLogMessage", userName, formattedQuoteAmount);
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerConfirmFiatReceipt(trade), channel, () -> {
+            long quoteSideAmount = trade.getContract().getQuoteSideAmount();
+            String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
+            String formattedQuoteAmount = AmountFormatter.formatQuoteAmountWithCode(Fiat.from(quoteSideAmount, quoteCurrencyCode));
+            String encoded = Res.encode("bisqEasy.tradeState.info.seller.phase2b.tradeLogMessage", userName, formattedQuoteAmount);
+            return encoded;
+        });
     }
 
     private void handleBuyerConfirmFiatSent(BisqEasyOpenTradeChannel channel,
                                             BisqEasyTrade trade,
                                             String userName) throws Exception {
-        bisqEasyTradeService.buyerConfirmFiatSent(trade);
-        String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
-        String encoded = Res.encode("bisqEasy.tradeState.info.buyer.phase2a.tradeLogMessage", userName, quoteCurrencyCode);
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.buyerConfirmFiatSent(trade), channel, () -> {
+            String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
+            String encoded = Res.encode("bisqEasy.tradeState.info.buyer.phase2a.tradeLogMessage", userName, quoteCurrencyCode);
+            return encoded;
+        });
     }
 
     private void handleSellerConfirmBtcSent(BisqEasyOpenTradeChannel channel,
@@ -440,16 +450,17 @@ public class TradeRestApi extends RestApiBase {
         if (isMainChain) {
             checkArgument(paymentProof.isPresent(), "Transaction ID is required for Bitcoin settlement");
         }
-        bisqEasyTradeService.sellerConfirmBtcSent(trade, paymentProof);
-        String encoded;
-        if (paymentProof.isEmpty()) {
-            encoded = Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.noProofProvided", userName);
-        } else {
-            String btcRailName = paymentRail.name();
-            String proofType = Res.get("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.paymentProof." + btcRailName);
-            encoded = Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage", userName, proofType, paymentProof.get());
-        }
-        bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+        tradeActionService.executeAndSendTradeLog(() -> bisqEasyTradeService.sellerConfirmBtcSent(trade, paymentProof), channel, () -> {
+            String encoded;
+            if (paymentProof.isEmpty()) {
+                encoded = Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.noProofProvided", userName);
+            } else {
+                String btcRailName = paymentRail.name();
+                String proofType = Res.get("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.paymentProof." + btcRailName);
+                encoded = Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage", userName, proofType, paymentProof.get());
+            }
+            return encoded;
+        });
     }
 
     private void handleBtcConfirmed(BisqEasyOpenTradeChannel channel,

@@ -19,6 +19,7 @@ package bisq.desktop.main.content.bisq_easy.open_trades.trade_state.states;
 
 import bisq.account.AccountService;
 import bisq.account.accounts.fiat.UserDefinedFiatAccount;
+import bisq.bisq_easy.BisqEasyTradeActionService;
 import bisq.chat.ChatService;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannelService;
@@ -26,6 +27,7 @@ import bisq.chat.priv.LeavePrivateChatManager;
 import bisq.common.monetary.Coin;
 import bisq.common.monetary.Fiat;
 import bisq.desktop.ServiceProvider;
+import bisq.desktop.common.utils.TradeExceptionHandler;
 import bisq.desktop.components.controls.WrappingText;
 import bisq.desktop.main.content.bisq_easy.components.trade.WaitingAnimation;
 import bisq.offer.bisq_easy.BisqEasyOffer;
@@ -50,6 +52,7 @@ public abstract class BaseState {
         protected final V view;
         protected final BisqEasyTradeService bisqEasyTradeService;
         protected final ChatService chatService;
+        protected final BisqEasyTradeActionService tradeActionService;
         protected final AccountService accountService;
         protected final UserIdentityService userIdentityService;
         protected final BisqEasyOpenTradeChannelService channelService;
@@ -59,6 +62,7 @@ public abstract class BaseState {
                              BisqEasyTrade bisqEasyTrade,
                              BisqEasyOpenTradeChannel channel) {
             chatService = serviceProvider.getChatService();
+            tradeActionService = serviceProvider.getBisqEasyService().getBisqEasyTradeActionService();
             bisqEasyTradeService = serviceProvider.getTradeService().getBisqEasyTradeService();
             accountService = serviceProvider.getAccountService();
             userIdentityService = serviceProvider.getUserService().getUserIdentityService();
@@ -97,6 +101,10 @@ public abstract class BaseState {
                     .map(UserDefinedFiatAccount.class::cast)
                     .map(account -> account.getAccountPayload().getAccountData())
                     .findFirst();
+        }
+
+        protected void runTradeAction(Runnable action, String encoded) {
+            TradeExceptionHandler.run(() -> tradeActionService.executeAndSendTradeLog(action, model.getChannel(), encoded));
         }
 
         protected void sendTradeLogMessage(String encoded) {

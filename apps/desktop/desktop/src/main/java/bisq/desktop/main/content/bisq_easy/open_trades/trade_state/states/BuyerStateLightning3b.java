@@ -19,7 +19,6 @@ package bisq.desktop.main.content.bisq_easy.open_trades.trade_state.states;
 
 import bisq.chat.bisq_easy.open_trades.BisqEasyOpenTradeChannel;
 import bisq.desktop.ServiceProvider;
-import bisq.desktop.common.utils.TradeExceptionHandler;
 import bisq.desktop.components.controls.MaterialTextField;
 import bisq.desktop.components.controls.WrappingText;
 import bisq.desktop.components.controls.validator.LightningPreImageValidator;
@@ -81,9 +80,8 @@ public class BuyerStateLightning3b extends BaseState {
         }
 
         private void onButtonClicked() {
-            if (TradeExceptionHandler.run(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()))) {
-                sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", model.getChannel().getMyUserIdentity().getUserName()));
-            }
+            runTradeAction(() -> bisqEasyTradeService.btcConfirmed(model.getTrade()),
+                    Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", model.getChannel().getMyUserIdentity().getUserName()));
         }
     }
 

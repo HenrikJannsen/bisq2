@@ -26,7 +26,6 @@ import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.components.containers.Spacer;
 import bisq.desktop.components.controls.AutoCompleteComboBox;
 import bisq.desktop.components.controls.MaterialTextArea;
-import bisq.desktop.common.utils.TradeExceptionHandler;
 import bisq.desktop.components.overlay.Popup;
 import bisq.i18n.Res;
 import bisq.trade.bisq_easy.BisqEasyTrade;
@@ -128,10 +127,9 @@ public class SellerState1 extends BaseState {
                 new Popup().warning(Res.get("validation.tooLong", UserProfile.MAX_LENGTH_STATEMENT)).show();
                 return;
             }
-            if (TradeExceptionHandler.run(() -> bisqEasyTradeService.sellerSendsPaymentAccount(model.getTrade(), paymentAccountData))) {
-                sendTradeLogMessage(Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage",
-                        model.getChannel().getMyUserIdentity().getUserName(), model.getPaymentAccountData().get()));
-            }
+            runTradeAction(() -> bisqEasyTradeService.sellerSendsPaymentAccount(model.getTrade(), paymentAccountData),
+                    Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage",
+                        model.getChannel().getMyUserIdentity().getUserName(), paymentAccountData));
         }
 
         private void onSelectAccount(UserDefinedFiatAccount account) {

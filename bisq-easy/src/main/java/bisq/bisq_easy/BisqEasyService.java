@@ -76,6 +76,7 @@ public class BisqEasyService implements Service {
     private final TradeService tradeService;
     private final UserIdentityService userIdentityService;
     private final BisqEasyNotificationsService bisqEasyNotificationsService;
+    private final BisqEasyTradeActionService bisqEasyTradeActionService;
     private final MarketPriceService marketPriceService;
     private final AlertService alertService;
 
@@ -112,6 +113,7 @@ public class BisqEasyService implements Service {
         this.contractService = contractService;
         this.userService = userService;
         this.chatService = chatService;
+        bisqEasyTradeActionService = new BisqEasyTradeActionService(chatService.getBisqEasyOpenTradeChannelService());
         this.settingsService = settingsService;
         this.supportService = supportService;
         this.notificationService = notificationService;
