@@ -17,7 +17,9 @@ processes it again when it processes the next message of a trade.
 1. A node keeps a trade message whose trade does not exist as a pending message. It processes the pending messages
    again when it processes a trade message of an existing trade. A pending message which the node then passes to the
    protocol of its trade is no longer pending. A pending message of an existing trade whose sender is not the trade
-   peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines.
+   peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines. In Bisq Easy, a message arriving
+   concurrently with the take offer request must reach the protocol when both deliveries finish. It must not remain
+   pending until an unrelated later message arrives.
 2. A node keeps at most 100 pending messages. When a message arrives while the node keeps 100 pending messages, the
    node drops the oldest pending message and keeps the new one. A message which is already pending does not change
    the number or the order of the pending messages.

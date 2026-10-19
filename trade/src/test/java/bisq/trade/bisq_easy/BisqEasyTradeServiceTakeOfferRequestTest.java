@@ -42,6 +42,7 @@ import bisq.security.SecurityService;
 import bisq.trade.ServiceProvider;
 import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
+import bisq.trade.bisq_easy.protocol.messages.BisqEasyBtcAddressMessage;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyReportErrorMessage;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTakeOfferRequest;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTakeOfferResponse;
@@ -53,10 +54,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.QUOTE_AMOUNT;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.buyerAsTakerTrade;
@@ -65,14 +73,17 @@ import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.offer;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.sellerAsMakerTrade;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.userProfile;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -144,6 +155,76 @@ class BisqEasyTradeServiceTakeOfferRequestTest {
         assertThat(sentMessage.getValue()).isInstanceOf(BisqEasyTakeOfferResponse.class);
         // The taker stored the network ID of the offer for the maker.
         assertThat(((BisqEasyTakeOfferResponse) sentMessage.getValue()).getSender()).isEqualTo(offersNetworkId);
+    }
+
+    @Test
+    void earlyMessageRacingWithProtocolCreationIsProcessedWithoutAnotherMessage() throws Exception {
+        BisqEasyTakeOfferRequest request = takeOfferRequest(contract, offersNetworkId);
+        BisqEasyBtcAddressMessage addressMessage = new BisqEasyBtcAddressMessage("address-message",
+                request.getTradeId(), BisqEasyProtocol.VERSION, takerIdentity.getNetworkId(), offersNetworkId,
+                "bitcoin-address", contract.getOffer());
+        service = spy(service);
+        when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
+        CountDownLatch lookupCompleted = new CountDownLatch(1);
+        CountDownLatch resumeDelivery = new CountDownLatch(1);
+        CountDownLatch creationStarted = new CountDownLatch(1);
+        AtomicBoolean pauseFirstLookup = new AtomicBoolean(true);
+        AtomicReference<Thread> deliveryThread = new AtomicReference<>();
+        AtomicReference<Thread> creationThread = new AtomicReference<>();
+        doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            if (pauseFirstLookup.compareAndSet(true, false)) {
+                deliveryThread.set(Thread.currentThread());
+                lookupCompleted.countDown();
+                assertThat(resumeDelivery.await(5, SECONDS)).isTrue();
+            }
+            return result;
+        }).when(service).findProtocol(request.getTradeId());
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<?> delivery = executor.submit(() -> service.onMessage(addressMessage));
+            try {
+                assertThat(lookupCompleted.await(5, SECONDS)).isTrue();
+                Future<?> creation = executor.submit(() -> {
+                    creationThread.set(Thread.currentThread());
+                    creationStarted.countDown();
+                    service.onMessage(request);
+                });
+                assertThat(creationStarted.await(5, SECONDS)).isTrue();
+                // Before the fix creation finishes while delivery still holds its empty lookup. With the fix,
+                // publication waits for delivery to enqueue the message under the same monitor.
+                awaitCreationCompletedOrBlockedByDelivery(creation, creationThread.get(), deliveryThread.get());
+                resumeDelivery.countDown();
+                creation.get(5, SECONDS);
+                delivery.get(5, SECONDS);
+            } finally {
+                resumeDelivery.countDown();
+            }
+        }
+
+        BisqEasyTrade trade = service.findTrade(request.getTradeId()).orElseThrow();
+        assertThat(trade.getBitcoinPaymentData()).contains("bitcoin-address");
+        assertThat(trade.getState()).isEqualTo(
+                BisqEasyTradeState.MAKER_SENT_TAKE_OFFER_RESPONSE__SELLER_DID_NOT_SENT_ACCOUNT_DATA__SELLER_RECEIVED_BTC_ADDRESS);
+        assertThat(service.getPendingMessages().isEmpty()).isTrue();
+    }
+
+    private static void awaitCreationCompletedOrBlockedByDelivery(Future<?> creation,
+                                                                  Thread creationThread,
+                                                                  Thread deliveryThread) throws InterruptedException {
+        long deadline = System.nanoTime() + SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (creation.isDone()) {
+                return;
+            }
+            ThreadInfo threadInfo = ManagementFactory.getThreadMXBean().getThreadInfo(creationThread.threadId());
+            if (threadInfo != null && threadInfo.getThreadState() == Thread.State.BLOCKED &&
+                    threadInfo.getLockOwnerId() == deliveryThread.threadId()) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        throw new AssertionError("Protocol creation neither completed nor waited for message delivery");
     }
 
     @Test

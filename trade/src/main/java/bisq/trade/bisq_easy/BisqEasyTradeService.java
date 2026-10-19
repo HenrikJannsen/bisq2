@@ -261,20 +261,25 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
 
     private void handleBisqEasyTradeMessage(BisqEasyTradeMessage message) {
         String tradeId = message.getTradeId();
-        findProtocol(tradeId).ifPresentOrElse(protocol -> {
-                    if (isMessageOfTradePeer(message, protocol)) {
-                        handleBisqEasyTradeMessage(message, protocol);
-                    } else {
-                        pendingMessages.remove(message);
-                    }
-                },
-                () -> {
-                    // Trade messages carry private data of the traders, so the log names only the message type.
-                    log.info("Protocol with tradeId {} not found. We add the message of type {} to pendingMessages " +
-                                    "for re-processing when the next message arrives.",
-                            StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
-                    pendingMessages.add(message);
-                });
+        Optional<BisqEasyProtocol> optionalProtocol;
+        // Registration and retaining an early message must be atomic. Otherwise registration can finish replaying
+        // pending messages between this lookup and the add, leaving the message waiting for another network message.
+        synchronized (pendingMessages) {
+            optionalProtocol = findProtocol(tradeId);
+            if (optionalProtocol.isEmpty()) {
+                log.info("Protocol with tradeId {} not found. We add the message of type {} to pendingMessages " +
+                                "for re-processing when the next message arrives.",
+                        StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
+                pendingMessages.add(message);
+                return;
+            }
+        }
+        BisqEasyProtocol protocol = optionalProtocol.orElseThrow();
+        if (isMessageOfTradePeer(message, protocol)) {
+            handleBisqEasyTradeMessage(message, protocol);
+        } else {
+            pendingMessages.remove(message);
+        }
     }
 
     // The state machine turns an exception of a message handler into a failure of the trade (Fsm.handle), and the
@@ -593,7 +598,9 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
             }
         }
         trade.setProtocolVersion(tradeProtocol.getVersion());
-        tradeProtocolById.put(id, tradeProtocol);
+        synchronized (pendingMessages) {
+            tradeProtocolById.put(id, tradeProtocol);
+        }
 
         bisqEasyOpenTradeChannelService.findChannelByTradeId(id)
                 .ifPresent(channel -> failTradeOnChatChannelMismatch(trade, channel));
