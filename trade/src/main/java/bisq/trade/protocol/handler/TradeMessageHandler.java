@@ -18,6 +18,7 @@
 package bisq.trade.protocol.handler;
 
 import bisq.common.fsm.EventHandler;
+import bisq.network.identity.NetworkId;
 import bisq.trade.ServiceProvider;
 import bisq.trade.Trade;
 import bisq.trade.protocol.messages.TradeMessage;
@@ -61,7 +62,19 @@ public abstract class TradeMessageHandler<T extends Trade<?, ?, ?>, M extends Tr
      * conditions are those which {@link #verifyInternal} requires.
      */
     public static boolean isMessageOfTradePeer(TradeMessage message, Trade<?, ?, ?> trade) {
-        return hasTradeId(message, trade) && isSentByTradePeer(message, trade) && isSentToMyself(message, trade);
+        return isMessageOfTradePeer(message, trade.getId(), trade.getPeer().getNetworkId(),
+                trade.getMyself().getNetworkId());
+    }
+
+    public static boolean isMessageOfTradePeer(TradeMessage message,
+                                               String tradeId,
+                                               NetworkId peerNetworkId,
+                                               NetworkId myNetworkId) {
+        // Compare identities by key, because addresses can change. The receiver must be this trade's own identity:
+        // another user profile on the same node must not let a peer affect this trade.
+        return message.getTradeId().equals(tradeId) &&
+                message.getSender().getId().equals(peerNetworkId.getId()) &&
+                message.getReceiver().getId().equals(myNetworkId.getId());
     }
 
     private static boolean hasTradeId(TradeMessage message, Trade<?, ?, ?> trade) {
@@ -75,11 +88,4 @@ public abstract class TradeMessageHandler<T extends Trade<?, ?, ?>, M extends Tr
         return message.getSender().getId().equals(trade.getPeer().getNetworkId().getId());
     }
 
-    // A node can host several identities. The confidential message layer has checked that the receiver of the message
-    // is the network ID whose key decrypted it. A message for this trade which the peer sent to another identity of our
-    // node must not reach this trade: the reaction of the trade would tell the peer that both identities are hosted on
-    // one node (rule 5 of docs/specifications/trade/trade-message-sender.md).
-    private static boolean isSentToMyself(TradeMessage message, Trade<?, ?, ?> trade) {
-        return message.getReceiver().getId().equals(trade.getMyself().getNetworkId().getId());
-    }
 }
