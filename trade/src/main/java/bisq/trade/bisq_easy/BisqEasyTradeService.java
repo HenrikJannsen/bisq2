@@ -231,27 +231,30 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
     @Override
     public void onMessage(EnvelopePayloadMessage envelopePayloadMessage) {
         if (envelopePayloadMessage instanceof BisqEasyTradeMessage bisqEasyTradeMessage) {
-            try {
-                verifyTradingNotOnHalt();
-                verifyMinVersionForTrading();
-            } catch (TradeRestrictedException e) {
-                log.warn("Ignoring inbound trade message as trading is currently not allowed: {}", e.getMessage());
-                return;
-            }
-
-            if (bannedUserService.isUserProfileBanned(bisqEasyTradeMessage.getSender())) {
-                log.warn("Message ignored as sender is banned");
-                return;
-            }
-
-            if (bisqEasyTradeMessage instanceof BisqEasyTakeOfferRequest) {
-                handleBisqEasyTakeOfferMessage((BisqEasyTakeOfferRequest) bisqEasyTradeMessage);
-            } else {
-                handleBisqEasyTradeMessage(bisqEasyTradeMessage);
-            }
+            processMessage(bisqEasyTradeMessage);
         }
     }
 
+    private void processMessage(BisqEasyTradeMessage bisqEasyTradeMessage) {
+        try {
+            verifyTradingNotOnHalt();
+            verifyMinVersionForTrading();
+        } catch (TradeRestrictedException e) {
+            log.warn("Ignoring inbound trade message as trading is currently not allowed: {}", e.getMessage());
+            return;
+        }
+
+        if (bannedUserService.isUserProfileBanned(bisqEasyTradeMessage.getSender())) {
+            log.warn("Message ignored as sender is banned");
+            return;
+        }
+
+        if (bisqEasyTradeMessage instanceof BisqEasyTakeOfferRequest) {
+            handleBisqEasyTakeOfferMessage((BisqEasyTakeOfferRequest) bisqEasyTradeMessage);
+        } else {
+            handleBisqEasyTradeMessage(bisqEasyTradeMessage);
+        }
+    }
 
     /* --------------------------------------------------------------------- */
     // Message event
@@ -589,6 +592,19 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
 
     private BisqEasyProtocol createAndAddTradeProtocol(BisqEasyTrade trade) {
         String id = trade.getId();
+        BisqEasyProtocol tradeProtocol = createTradeProtocol(trade);
+        synchronized (pendingMessages) {
+            tradeProtocolById.put(id, tradeProtocol);
+        }
+
+        bisqEasyOpenTradeChannelService.findChannelByTradeId(id)
+                .ifPresent(channel -> failTradeOnChatChannelMismatch(trade, channel));
+        // The taker's first chat message, which creates our trade chat channel, can be pending if it arrived first
+        bisqEasyOpenTradeChannelService.processPendingMessages(id);
+        return tradeProtocol;
+    }
+
+    private BisqEasyProtocol createTradeProtocol(BisqEasyTrade trade) {
         BisqEasyProtocol tradeProtocol;
         boolean isBuyer = trade.isBuyer();
         if (trade.isTaker()) {
@@ -605,14 +621,6 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
             }
         }
         trade.setProtocolVersion(tradeProtocol.getVersion());
-        synchronized (pendingMessages) {
-            tradeProtocolById.put(id, tradeProtocol);
-        }
-
-        bisqEasyOpenTradeChannelService.findChannelByTradeId(id)
-                .ifPresent(channel -> failTradeOnChatChannelMismatch(trade, channel));
-        // The taker's first chat message, which creates our trade chat channel, can be pending if it arrived first
-        bisqEasyOpenTradeChannelService.processPendingMessages(id);
         return tradeProtocol;
     }
 
