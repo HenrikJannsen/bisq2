@@ -42,5 +42,15 @@ not on disk. Before this rule a failed write did not count as unsaved, so a chan
 user changed nothing else in that store, for example a new payment account, was lost at the next
 start when a write failed once, for example because a sync tool locked the file.
 
+## Coalesced writes
+
+A persistence client which coalesces its requests runs at most one write of its store at a time. It takes the copy of
+the store when a write starts. The requests which arrive during a write are written together by one write after it. It
+drops no request. It keeps a failed state as unsaved, as a client which limits its write rate does.
+
+Reason: a client which limits its write rate skips a request within the limit. It writes the skipped change only at a
+later request or at shutdown, so a crash loses it. Stores whose changes must not get lost, for example the trades, need
+a client which writes every request.
+
 These rules do not change the persisted format. They describe completion of a write, not a
 guarantee of durability against loss of power or storage hardware failure.
