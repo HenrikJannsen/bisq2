@@ -30,8 +30,10 @@ import bisq.common.observable.Observable;
 import bisq.common.util.StringUtils;
 import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.identity.Identity;
+import bisq.network.NetworkService;
 import bisq.network.SendMessageResult;
 import bisq.network.identity.NetworkId;
+import bisq.network.p2p.services.confidential.ConfidentialMessageService;
 import bisq.offer.Direction;
 import bisq.offer.amount.spec.QuoteSideFixedAmountSpec;
 import bisq.offer.bisq_easy.BisqEasyOffer;
@@ -40,8 +42,10 @@ import bisq.trade.ServiceProvider;
 import bisq.trade.bisq_easy.protocol.BisqEasyProtocol;
 import bisq.trade.bisq_easy.protocol.BisqEasyTradeState;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyAccountDataMessage;
+import bisq.trade.bisq_easy.protocol.messages.BisqEasyReportErrorMessage;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTakeOfferRequest;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTakeOfferResponse;
+import bisq.trade.exceptions.TradeProtocolFailure;
 import bisq.user.reputation.ReputationScore;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -70,6 +74,7 @@ import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -105,15 +110,13 @@ class BisqEasyTradeServiceTradeTasksTest {
             sentMessages.add(invocation.getArgument(0));
             return CompletableFuture.completedFuture(new SendMessageResult());
         });
-
-        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, pool);
-        when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
-        service.initialize().join();
     }
 
     @AfterEach
     void tearDown() {
-        service.shutdown().join();
+        if (service != null) {
+            service.shutdown().join();
+        }
     }
 
     // The seller sent the account data right after the request. The task of the account data runs first and finds no
@@ -123,6 +126,7 @@ class BisqEasyTradeServiceTradeTasksTest {
     // both traders waited for each other.
     @Test
     void accountDataWhichArrivesWithTheRequestIsAppliedAfterTheRequest() throws Exception {
+        startService();
         BisqEasyTakeOfferRequest request = takeOfferRequest(tradeId, sellerIdentity, contract);
         BisqEasyAccountDataMessage accountData = accountDataMessage();
 
@@ -169,6 +173,7 @@ class BisqEasyTradeServiceTradeTasksTest {
 
     @Test
     void copiesOfARequestWhichArriveAtTheSameTimeCreateOneTrade() throws Exception {
+        startService();
         BisqEasyTakeOfferRequest request = takeOfferRequest(tradeId, sellerIdentity, contract);
 
         CompletableFuture.allOf(CompletableFuture.runAsync(() -> service.onMessage(request), pool),
@@ -178,6 +183,40 @@ class BisqEasyTradeServiceTradeTasksTest {
 
         assertThat(service.getTrades()).hasSize(1);
         assertThat(sentMessages).filteredOn(BisqEasyTakeOfferResponse.class::isInstance).hasSize(1);
+    }
+
+    // The network layer passes the messages which it received before the subscription to the new listener
+    @Test
+    void messageWhichTheNetworkReplaysAtTheSubscriptionReachesTheProtocolOfItsStoredTrade() throws Exception {
+        BisqEasyTrade storedTrade = new BisqEasyTrade(contract, true, false, buyerIdentity, offer,
+                sellerIdentity.getNetworkId(), buyerIdentity.getNetworkId());
+        BisqEasyReportErrorMessage errorReport = new BisqEasyReportErrorMessage(StringUtils.createUid(),
+                tradeId,
+                BisqEasyProtocol.VERSION,
+                sellerIdentity.getNetworkId(),
+                buyerIdentity.getNetworkId(),
+                "error",
+                "",
+                TradeProtocolFailure.UNKNOWN);
+        NetworkService networkService = serviceProvider.getNetworkService();
+        doAnswer(invocation -> {
+            invocation.<ConfidentialMessageService.Listener>getArgument(0).onMessage(errorReport);
+            return null;
+        }).when(networkService).subscribeToConfidentialMessages(any());
+
+        startService(storedTrade);
+        service.afterTasksOfTrade(tradeId).get(10, TimeUnit.SECONDS);
+
+        assertThat(storedTrade.getTradeState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
+    }
+
+    private void startService(BisqEasyTrade... storedTrades) {
+        service = new BisqEasyTradeService(serviceProvider, AppType.DESKTOP, pool);
+        when(serviceProvider.getBisqEasyTradeService()).thenReturn(service);
+        for (BisqEasyTrade storedTrade : storedTrades) {
+            service.getPersistableStore().addTrade(storedTrade);
+        }
+        service.initialize().join();
     }
 
     private BisqEasyAccountDataMessage accountDataMessage() {

@@ -21,6 +21,10 @@ the trade stopped. Locks in single places did not cover all such combinations.
 5. At shutdown, the node refuses new tasks and waits for the queued tasks for a limited time.
 6. A received trade message runs as a task of the trade whose ID it carries, also when the node has no trade with that
    ID. The take offer request runs as a task of the trade which it creates.
+7. At startup, the node creates the protocol of each stored trade in a task of that trade, before it subscribes to the
+   trade messages of the network. The initialization of the trade service completes when these tasks have run. A
+   failed creation is logged, and the other trades still start.
+8. The check of a trade chat channel against its trade runs as a task of the trade.
 
 ## Reasons
 
@@ -41,3 +45,8 @@ the trade stopped. Locks in single places did not cover all such combinations.
   and sent the payment account data right away, the buyer waited for the account data and the seller for the payment,
   and the trade stopped. Two copies of a take offer request also run one after the other, so the second one finds the
   trade which the first one created.
+- Rule 7: at the subscription, the network layer passes the messages which it received before to the trade service
+  (see [Startup replay](../network/startup-replay.md)). As tasks of their trades, they run after the protocol of their
+  trade was created. One stored trade whose protocol cannot be created must not stop the other trades.
+- Rule 8: the check fails a trade whose channel does not match it. It reads and changes the state of the trade, so it
+  must not run at the same time as another operation of the trade.

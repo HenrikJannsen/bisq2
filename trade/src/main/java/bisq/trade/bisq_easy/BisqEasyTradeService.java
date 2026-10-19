@@ -33,6 +33,7 @@ import bisq.common.observable.collection.ReadOnlyObservableSet;
 import bisq.common.platform.Version;
 import bisq.common.threading.ExecutorFactory;
 import bisq.common.timer.Scheduler;
+import bisq.common.util.CompletableFutureUtils;
 import bisq.common.util.ExceptionUtil;
 import bisq.common.util.StringUtils;
 import bisq.common.validation.RequestedAmountValidation;
@@ -92,6 +93,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -185,14 +187,23 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                                 trade.getMyself().getNetworkId().getId().equals(receiverUserProfileId))
                         .isPresent());
 
-        persistableStore.getTrades().forEach(trade -> processPendingMessages(createAndAddTradeProtocol(trade)));
+        // Submitted before the subscription below, so a message of a stored trade runs after the creation of its protocol
+        List<CompletableFuture<Void>> protocolCreations = persistableStore.getTrades().stream()
+                .map(trade -> tradeTaskExecutor.submit(trade.getId(),
+                                () -> processPendingMessages(createAndAddTradeProtocol(trade)))
+                        .exceptionally(throwable -> {
+                            log.error("Creating the protocol of trade {} failed", trade.getId(), throwable);
+                            return null;
+                        }))
+                .toList();
 
         // Checks all existing channels against their trades, and later a channel which appears for an existing
         // trade. A trade which appears for an existing channel is checked when its protocol gets created.
         chatChannelsPin = bisqEasyOpenTradeChannelService.getChannels().addObserver(new CollectionObserver<>() {
             @Override
             public void onAdded(BisqEasyOpenTradeChannel channel) {
-                findTrade(channel.getTradeId()).ifPresent(trade -> failTradeOnChatChannelMismatch(trade, channel));
+                String tradeId = channel.getTradeId();
+                runTradeTask(tradeId, () -> findTrade(tradeId).ifPresent(trade -> failTradeOnChatChannelMismatch(trade, channel)));
             }
 
             @Override
@@ -215,7 +226,8 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                 .periodically(1, TimeUnit.HOURS);
         numDaysAfterRedactingTradeDataPin = settingsService.getNumDaysAfterRedactingTradeData().addObserver(numDays -> maybeRedactDataOfCompletedTrades());
 
-        return CompletableFuture.completedFuture(true);
+        // After the initialization, the protocols of the stored trades exist
+        return CompletableFutureUtils.allOf(protocolCreations).thenApply(nil -> true);
     }
 
     public CompletableFuture<Boolean> shutdown() {
