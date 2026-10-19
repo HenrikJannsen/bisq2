@@ -26,22 +26,20 @@ import bisq.persistence.PersistableStore;
 import bisq.trade.bisq_easy.protocol.BisqEasyClosedTrade;
 import bisq.trade.bisq_easy.protocol.messages.BisqEasyTradeMessage;
 import bisq.trade.protocol.messages.PendingTradeMessages;
+import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Getter(AccessLevel.PACKAGE)
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
-@Slf4j
 public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeStore> {
     private final ObservableSet<BisqEasyTrade> trades = new ObservableSet<>();
 
@@ -74,29 +72,18 @@ public final class BisqEasyTradeStore implements PersistableStore<BisqEasyTradeS
                         .map(message -> message.<bisq.trade.protobuf.TradeMessage>resolveValueProto(serializeForHash))
                         .toList())
                 .addAllTrades(trades.stream()
-                        .map(trade -> {
-                            try {
-                                return trade.toProto(serializeForHash);
-                            } catch (Exception e) {
-                                log.error("Could not create proto from BisqEasyTrade {}", trade, e);
-                                return null;
-                            }
-                        })
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toList()))
+                        .map(trade -> trade.toProto(serializeForHash))
+                        .toList())
                 .addAllTradeIds(tradeIds)
                 .addAllBisqEasyClosedTrades(closedTrades.stream()
-                        .map(closedTrade -> {
-                            try {
-                                return closedTrade.toProto(serializeForHash);
-                            } catch (Exception e) {
-                                log.error("Could not create proto from BisqEasyClosedTrade {}", closedTrade, e);
-                                return null;
-                            }
-                        })
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toList())
+                        .map(closedTrade -> closedTrade.toProto(serializeForHash))
+                        .toList()
                 );
+    }
+
+    /** Capture on the state owner. Failure of any entry fails the whole snapshot. */
+    Any captureSnapshot() {
+        return toAny();
     }
 
     @Override

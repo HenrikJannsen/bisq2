@@ -5,6 +5,9 @@ Serialization, temporary-file writes, and replacement failures must report failu
 An asynchronous write completes exceptionally on failure. A persistence client reports `false`
 when its asynchronous write fails. Persisting all clients succeeds only if every client succeeds.
 
+Clients with one state owner additionally follow [Stores with one state owner](owned-store-snapshots.md)
+for complete immutable snapshots, revisions, pending writes, and flush ordering.
+
 ## Replacement of the store file
 
 A write must not remove or move the current store file before the new file replaces it. The writer
