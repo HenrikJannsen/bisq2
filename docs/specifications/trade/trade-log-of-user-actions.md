@@ -7,11 +7,13 @@ Bitcoin payment with an optional payment proof.
 
 ## Rules
 
-1. The trade service reports whether the protocol applied such an action. It throws `TradeActionNotAppliedException`
-   when the trade has no protocol, when the trade is in a final state before the action, or when the trade is
-   `FAILED` or `FAILED_AT_PEER` after the action.
-2. A caller sends the trade log message of the action only when the call returns normally. The desktop app then shows
-   a warning instead. The API returns an error.
+1. The trade service reports whether the protocol applied such an action. It applies the action in a task of the trade
+   (see [Trade task execution](trade-task-execution.md)) and returns a future of that task. The future fails with
+   `TradeActionNotAppliedException` when the trade has no protocol, when the trade is in a final state before the
+   action, or when the trade is `FAILED` or `FAILED_AT_PEER` after the action. A trade restriction and invalid data of
+   the action are reported by an exception of the call.
+2. A caller sends the trade log message of the action only when the future completes normally. Otherwise the desktop
+   app shows a warning, and the API returns an error. The desktop app does not wait for the future in the UI thread.
 
 ## Reason
 

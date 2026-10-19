@@ -17,35 +17,56 @@
 
 package bisq.desktop.common.utils;
 
+import bisq.desktop.common.threading.UIThread;
 import bisq.desktop.components.overlay.Popup;
 import bisq.i18n.Res;
 import bisq.trade.TradeActionNotAppliedException;
 import bisq.trade.TradeRestrictedException;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
 
 public final class TradeExceptionHandler {
     private TradeExceptionHandler() {
     }
 
     /**
-     * Runs the trade action, and then onApplied if the trade applied the action. In onApplied the caller sends the
-     * data of the action to the peer as trade log message (docs/specifications/trade/trade-log-of-user-actions.md).
+     * Starts the trade action, and runs onApplied in the UI thread when the trade has applied it. In onApplied the
+     * caller sends the data of the action to the peer as trade log message
+     * (docs/specifications/trade/trade-log-of-user-actions.md). The trade applies the action in a task of the trade,
+     * so the UI thread does not wait for it.
      */
-    public static void run(Runnable tradeAction, Runnable onApplied) {
-        if (run(tradeAction)) {
-            onApplied.run();
+    public static void run(Supplier<? extends CompletableFuture<?>> tradeAction, Runnable onApplied) {
+        CompletableFuture<?> result;
+        try {
+            result = tradeAction.get();
+        } catch (TradeRestrictedException | TradeActionNotAppliedException e) {
+            showWarning(e);
+            return;
         }
+        result.whenComplete((nil, throwable) -> UIThread.run(() -> {
+            if (throwable == null) {
+                onApplied.run();
+                return;
+            }
+            Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null ?
+                    throwable.getCause() :
+                    throwable;
+            if (cause instanceof TradeRestrictedException || cause instanceof TradeActionNotAppliedException) {
+                showWarning((RuntimeException) cause);
+            } else {
+                new Popup().error(cause).show();
+            }
+        }));
     }
 
     public static boolean run(Runnable tradeAction) {
         try {
             tradeAction.run();
             return true;
-        } catch (TradeRestrictedException e) {
-            new Popup().warning(localizedMessage(e)).show();
-            return false;
-        } catch (TradeActionNotAppliedException e) {
-            // The trade was closed or failed in the meantime. The caller must not send the data of the action.
-            new Popup().warning(Res.get("trade.error.actionNotApplied")).show();
+        } catch (TradeRestrictedException | TradeActionNotAppliedException e) {
+            showWarning(e);
             return false;
         }
     }
@@ -61,5 +82,14 @@ public final class TradeExceptionHandler {
             case MAKER_VERSION_BELOW_MIN_REQUIRED -> Res.get("trade.error.makerVersionBelowMinRequired",
                     e.findMinRequiredVersion().orElse(""));
         };
+    }
+
+    private static void showWarning(RuntimeException e) {
+        if (e instanceof TradeRestrictedException tradeRestrictedException) {
+            new Popup().warning(localizedMessage(tradeRestrictedException)).show();
+        } else {
+            // The trade was closed or failed in the meantime. The caller must not send the data of the action.
+            new Popup().warning(Res.get("trade.error.actionNotApplied")).show();
+        }
     }
 }

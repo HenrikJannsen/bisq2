@@ -38,6 +38,7 @@ import bisq.contract.bisq_easy.BisqEasyContract;
 import bisq.offer.bisq_easy.BisqEasyOffer;
 import bisq.support.SupportService;
 import bisq.support.mediation.bisq_easy.BisqEasyMediationRequestService;
+import bisq.trade.TradeActionNotAppliedException;
 import bisq.trade.TradeRestrictedException;
 import bisq.trade.TradeService;
 import bisq.trade.bisq_easy.BisqEasyTrade;
@@ -56,6 +57,7 @@ import org.mockito.ArgumentCaptor;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -146,6 +148,40 @@ class TradeRestApiTest {
         assertThat(entity.get("minRequiredVersion")).isEqualTo("2.1.12");
 
         // No trade-log message is sent because the action failed before any chat message is emitted.
+        verify(openTradeChannelService, never()).sendTradeLogMessage(any(), any());
+    }
+
+    @Test
+    void processTradeEventSkipsTradeLogMessageWhenTheTradeDidNotApplyTheAction() {
+        BisqEasyOpenTradeChannelService openTradeChannelService = mock(BisqEasyOpenTradeChannelService.class);
+        BisqEasyTradeService bisqEasyTradeService = mock(BisqEasyTradeService.class);
+        TradeRestApi restApi = newTradeRestApi(openTradeChannelService, bisqEasyTradeService);
+
+        String tradeId = "trade-1";
+        BisqEasyOpenTradeChannel channel = mock(BisqEasyOpenTradeChannel.class, RETURNS_DEEP_STUBS);
+        BisqEasyTrade trade = mock(BisqEasyTrade.class);
+        BisqEasyContract contract = mock(BisqEasyContract.class);
+        BitcoinPaymentMethodSpec paymentMethodSpec = mock(BitcoinPaymentMethodSpec.class);
+        BitcoinPaymentMethod paymentMethod = mock(BitcoinPaymentMethod.class);
+        when(openTradeChannelService.findChannelByTradeId(tradeId)).thenReturn(Optional.of(channel));
+        when(bisqEasyTradeService.findTrade(tradeId)).thenReturn(Optional.of(trade));
+        when(trade.getContract()).thenReturn(contract);
+        when(contract.getBaseSidePaymentMethodSpec()).thenReturn(paymentMethodSpec);
+        when(paymentMethodSpec.getPaymentMethod()).thenReturn(paymentMethod);
+        when(paymentMethod.getPaymentRail()).thenReturn(BitcoinPaymentRail.MAIN_CHAIN);
+
+        // The trade applies the action in a task of the trade. The peer had cancelled the trade before.
+        when(bisqEasyTradeService.buyerConfirmFiatSent(trade)).thenReturn(CompletableFuture.failedFuture(
+                new TradeActionNotAppliedException("The trade is in the final state PEER_CANCELLED")));
+
+        AsyncResponse asyncResponse = mock(AsyncResponse.class);
+        TradeEventDto event = new TradeEventDto(TradeEventTypeDto.BUYER_CONFIRM_FIAT_SENT, null);
+
+        restApi.processTradeEvent(tradeId, event, asyncResponse);
+
+        ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
+        verify(asyncResponse).resume(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
         verify(openTradeChannelService, never()).sendTradeLogMessage(any(), any());
     }
 

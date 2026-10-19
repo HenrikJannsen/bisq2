@@ -24,12 +24,14 @@ import bisq.trade.TradeActionNotAppliedException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.concurrent.CompletionException;
 
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.QUOTE_AMOUNT;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.buyerAsTakerTrade;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.contract;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.identity;
 import static bisq.trade.bisq_easy.BisqEasyTradeTestData.offer;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -62,6 +64,8 @@ class BisqEasyTradeServiceBitcoinPaymentDataTest {
     @Test
     void addressPassesTheCheck() {
         // Without a protocol of the trade the action is not applied, after the check let the data through
-        assertThrows(TradeActionNotAppliedException.class, () -> service.buyerSendBitcoinPaymentData(trade, ADDRESS));
+        CompletionException exception = assertThrows(CompletionException.class,
+                () -> service.buyerSendBitcoinPaymentData(trade, ADDRESS).join());
+        assertInstanceOf(TradeActionNotAppliedException.class, exception.getCause());
     }
 }

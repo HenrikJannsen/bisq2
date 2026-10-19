@@ -25,6 +25,9 @@ the trade stopped. Locks in single places did not cover all such combinations.
    trade messages of the network. The initialization of the trade service completes when these tasks have run. A
    failed creation is logged, and the other trades still start.
 8. The check of a trade chat channel against its trade runs as a task of the trade.
+9. The actions of the user on a trade, from the desktop or the API, run as tasks of the trade. This includes taking an
+   offer, rejecting or cancelling a trade, and confirming the Bitcoin payment. The call checks the trade restrictions
+   and the data of the action, and returns a future of the task.
 
 ## Reasons
 
@@ -50,3 +53,7 @@ the trade stopped. Locks in single places did not cover all such combinations.
   trade was created. One stored trade whose protocol cannot be created must not stop the other trades.
 - Rule 8: the check fails a trade whose channel does not match it. It reads and changes the state of the trade, so it
   must not run at the same time as another operation of the trade.
+- Rule 9: an action sees the state which the messages before it produced, and a message which arrives during the action
+  waits for it. The UI thread does not wait for the trade. Before, a click on the desktop could wait for a message
+  handler of the same trade, for example while it sent a message to the peer. A restriction and invalid data are
+  reported by the call, so the user gets the error before the action is submitted.

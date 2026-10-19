@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -46,8 +47,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * The desktop and the API send the data of a user action (payment account data, Bitcoin address, payment proof) to the
- * peer as trade log message after the trade service call. The call must therefore fail when the protocol does not
- * apply the action.
+ * peer as trade log message after the trade service applied the action. The future of the call must therefore fail
+ * when the protocol does not apply the action.
  */
 class BisqEasyTradeServiceUserActionTest {
     private final NetworkId me = networkId("me", 1001);
@@ -74,8 +75,9 @@ class BisqEasyTradeServiceUserActionTest {
 
     @Test
     void actionWithoutProtocolIsNotApplied() {
-        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress"))
-                .isInstanceOf(TradeActionNotAppliedException.class);
+        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress").join())
+                .isInstanceOf(CompletionException.class)
+                .hasCauseInstanceOf(TradeActionNotAppliedException.class);
     }
 
     @Test
@@ -85,17 +87,19 @@ class BisqEasyTradeServiceUserActionTest {
                 "error", "", TradeProtocolFailure.UNKNOWN));
         assertThat(trade.getState()).isEqualTo(BisqEasyTradeState.FAILED_AT_PEER);
 
-        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress"))
-                .isInstanceOf(TradeActionNotAppliedException.class);
-        assertThatThrownBy(() -> service.buyerConfirmFiatSent(trade))
-                .isInstanceOf(TradeActionNotAppliedException.class);
+        assertThatThrownBy(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress").join())
+                .isInstanceOf(CompletionException.class)
+                .hasCauseInstanceOf(TradeActionNotAppliedException.class);
+        assertThatThrownBy(() -> service.buyerConfirmFiatSent(trade).join())
+                .isInstanceOf(CompletionException.class)
+                .hasCauseInstanceOf(TradeActionNotAppliedException.class);
     }
 
     @Test
     void actionOfAnActiveTradeIsNotRefused() {
         startServiceWithTrade();
 
-        assertThatCode(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress")).doesNotThrowAnyException();
+        assertThatCode(() -> service.buyerSendBitcoinPaymentData(trade, "bc1qaddress").join()).doesNotThrowAnyException();
     }
 
     private void startServiceWithTrade() {

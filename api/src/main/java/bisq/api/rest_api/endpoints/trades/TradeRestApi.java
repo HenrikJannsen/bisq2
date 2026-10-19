@@ -86,6 +86,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -240,7 +242,7 @@ public class TradeRestApi extends RestApiBase {
             BisqEasyTrade bisqEasyTrade = bisqEasyProtocol.getModel();
             log.info("Selected mediator for trade {}: {}", bisqEasyTrade.getShortId(), mediator.map(UserProfile::getUserName).orElse("N/A"));
 
-            bisqEasyTradeService.takeOffer(bisqEasyTrade);
+            join(bisqEasyTradeService.takeOffer(bisqEasyTrade));
             BisqEasyContract contract = bisqEasyTrade.getContract();
 
             String tradeId = bisqEasyTrade.getId();
@@ -369,7 +371,7 @@ public class TradeRestApi extends RestApiBase {
     private void handleRejectTrade(BisqEasyOpenTradeChannel channel,
                                    BisqEasyTrade trade,
                                    String userName) throws Exception {
-        bisqEasyTradeService.rejectTrade(trade);
+        join(bisqEasyTradeService.rejectTrade(trade));
         String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
         bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel).get();
     }
@@ -377,7 +379,7 @@ public class TradeRestApi extends RestApiBase {
     private void handleCancelTrade(BisqEasyOpenTradeChannel channel,
                                    BisqEasyTrade trade,
                                    String userName) throws Exception {
-        bisqEasyTradeService.cancelTrade(trade);
+        join(bisqEasyTradeService.cancelTrade(trade));
         String encoded = Res.encode("bisqEasy.openTrades.tradeLogMessage.rejected", userName);
         bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel).get();
     }
@@ -392,7 +394,7 @@ public class TradeRestApi extends RestApiBase {
                                                  TradeEventDto tradeEvent,
                                                  String userName) throws Exception {
         String paymentAccountData = checkNotNull(tradeEvent.data(), "paymentAccountData must not be null");
-        bisqEasyTradeService.sellerSendsPaymentAccount(trade, paymentAccountData);
+        join(bisqEasyTradeService.sellerSendsPaymentAccount(trade, paymentAccountData));
         String encoded = Res.encode("bisqEasy.tradeState.info.seller.phase1.tradeLogMessage", userName, paymentAccountData);
         bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
     }
@@ -405,7 +407,7 @@ public class TradeRestApi extends RestApiBase {
         String btcRailName = paymentRail.name();
         String key = "bisqEasy.tradeState.info.buyer.phase1a.tradeLogMessage." + btcRailName;
         String bitcoinPaymentData = checkNotNull(tradeEvent.data(), "bitcoinPaymentData must not be null");
-        bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData);
+        join(bisqEasyTradeService.buyerSendBitcoinPaymentData(trade, bitcoinPaymentData));
         String encoded = Res.encode(key, userName, bitcoinPaymentData);
         bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
     }
@@ -413,7 +415,7 @@ public class TradeRestApi extends RestApiBase {
     private void handleSellerConfirmFiatReceipt(BisqEasyOpenTradeChannel channel,
                                                 BisqEasyTrade trade,
                                                 String userName) throws Exception {
-        bisqEasyTradeService.sellerConfirmFiatReceipt(trade);
+        join(bisqEasyTradeService.sellerConfirmFiatReceipt(trade));
         long quoteSideAmount = trade.getContract().getQuoteSideAmount();
         String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
         String formattedQuoteAmount = AmountFormatter.formatQuoteAmountWithCode(Fiat.from(quoteSideAmount, quoteCurrencyCode));
@@ -424,7 +426,7 @@ public class TradeRestApi extends RestApiBase {
     private void handleBuyerConfirmFiatSent(BisqEasyOpenTradeChannel channel,
                                             BisqEasyTrade trade,
                                             String userName) throws Exception {
-        bisqEasyTradeService.buyerConfirmFiatSent(trade);
+        join(bisqEasyTradeService.buyerConfirmFiatSent(trade));
         String quoteCurrencyCode = trade.getOffer().getMarket().getQuoteCurrencyCode();
         String encoded = Res.encode("bisqEasy.tradeState.info.buyer.phase2a.tradeLogMessage", userName, quoteCurrencyCode);
         bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
@@ -440,7 +442,7 @@ public class TradeRestApi extends RestApiBase {
         if (isMainChain) {
             checkArgument(paymentProof.isPresent(), "Transaction ID is required for Bitcoin settlement");
         }
-        bisqEasyTradeService.sellerConfirmBtcSent(trade, paymentProof);
+        join(bisqEasyTradeService.sellerConfirmBtcSent(trade, paymentProof));
         String encoded;
         if (paymentProof.isEmpty()) {
             encoded = Res.encode("bisqEasy.tradeState.info.seller.phase3a.tradeLogMessage.noProofProvided", userName);
@@ -456,10 +458,23 @@ public class TradeRestApi extends RestApiBase {
                                     BisqEasyTrade trade,
                                     BitcoinPaymentRail paymentRail,
                                     String userName) throws Exception {
-        bisqEasyTradeService.btcConfirmed(trade);
+        join(bisqEasyTradeService.btcConfirmed(trade));
         if (paymentRail.equals(BitcoinPaymentRail.LN) && trade.isBuyer()) {
             String encoded = Res.encode("bisqEasy.tradeState.info.buyer.phase3b.tradeLogMessage.ln", userName);
             bisqEasyOpenTradeChannelService.sendTradeLogMessage(encoded, channel);
+        }
+    }
+
+    // The trade service applies an action in a task of the trade. We wait for it, and throw the exception of the
+    // task, so that the endpoints map it as an exception of the call.
+    private static <T> T join(CompletableFuture<T> tradeTask) {
+        try {
+            return tradeTask.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw e;
         }
     }
 

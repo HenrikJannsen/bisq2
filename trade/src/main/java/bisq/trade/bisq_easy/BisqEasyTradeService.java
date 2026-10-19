@@ -444,73 +444,76 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
         return protocol;
     }
 
-    public void takeOffer(BisqEasyTrade trade) {
-        handleBisqEasyTradeEvent(trade, new BisqEasyTakeOfferEvent());
+    public CompletableFuture<Void> takeOffer(BisqEasyTrade trade) {
+        return handleBisqEasyTradeEvent(trade, new BisqEasyTakeOfferEvent());
     }
 
-    public void sellerSendsPaymentAccount(BisqEasyTrade trade, String paymentAccountData) {
-        applyUserTradeAction(trade, new BisqEasyAccountDataEvent(paymentAccountData));
+    public CompletableFuture<Void> sellerSendsPaymentAccount(BisqEasyTrade trade, String paymentAccountData) {
+        return applyUserTradeAction(trade, new BisqEasyAccountDataEvent(paymentAccountData));
     }
 
-    public void buyerConfirmFiatSent(BisqEasyTrade trade) {
-        applyUserTradeAction(trade, new BisqEasyConfirmFiatSentEvent());
+    public CompletableFuture<Void> buyerConfirmFiatSent(BisqEasyTrade trade) {
+        return applyUserTradeAction(trade, new BisqEasyConfirmFiatSentEvent());
     }
 
     // The seller's node fails the trade when the data requests another amount than the trade amount
     // (docs/specifications/trade/bisq-easy-bitcoin-payment-data.md)
-    public void buyerSendBitcoinPaymentData(BisqEasyTrade trade, String buyersBitcoinPaymentData) {
+    public CompletableFuture<Void> buyerSendBitcoinPaymentData(BisqEasyTrade trade, String buyersBitcoinPaymentData) {
         long tradeAmount = trade.getContract().getBaseSideAmount();
         RequestedAmountValidation.checkRequestsOnlyAmount(buyersBitcoinPaymentData, tradeAmount);
-        applyUserTradeAction(trade, new BisqEasySendBtcAddressEvent(buyersBitcoinPaymentData));
+        return applyUserTradeAction(trade, new BisqEasySendBtcAddressEvent(buyersBitcoinPaymentData));
     }
 
-    public void sellerConfirmFiatReceipt(BisqEasyTrade trade) {
-        applyUserTradeAction(trade, new BisqEasyConfirmFiatReceiptEvent());
+    public CompletableFuture<Void> sellerConfirmFiatReceipt(BisqEasyTrade trade) {
+        return applyUserTradeAction(trade, new BisqEasyConfirmFiatReceiptEvent());
     }
 
-    public void sellerConfirmBtcSent(BisqEasyTrade trade, Optional<String> paymentProof) {
-        applyUserTradeAction(trade, new BisqEasyConfirmBtcSentEvent(paymentProof));
+    public CompletableFuture<Void> sellerConfirmBtcSent(BisqEasyTrade trade, Optional<String> paymentProof) {
+        return applyUserTradeAction(trade, new BisqEasyConfirmBtcSentEvent(paymentProof));
     }
 
-    public void btcConfirmed(BisqEasyTrade trade) {
-        handleBisqEasyTradeEvent(trade, new BisqEasyBtcConfirmedEvent());
+    public CompletableFuture<Void> btcConfirmed(BisqEasyTrade trade) {
+        return handleBisqEasyTradeEvent(trade, new BisqEasyBtcConfirmedEvent());
     }
 
-    public void rejectTrade(BisqEasyTrade trade) {
-        handleBisqEasyTradeEvent(trade, new BisqEasyRejectTradeEvent());
+    public CompletableFuture<Void> rejectTrade(BisqEasyTrade trade) {
+        return handleBisqEasyTradeEvent(trade, new BisqEasyRejectTradeEvent());
     }
 
-    public void cancelTrade(BisqEasyTrade trade) {
-        handleBisqEasyTradeEvent(trade, new BisqEasyCancelTradeEvent());
+    public CompletableFuture<Void> cancelTrade(BisqEasyTrade trade) {
+        return handleBisqEasyTradeEvent(trade, new BisqEasyCancelTradeEvent());
     }
 
     // A user action whose data the caller also sends to the peer as trade log message, for example the payment account
     // data. The protocol does not throw when it does not apply an event: Fsm ignores an event in a final state, and
-    // BisqEasyProtocol turns a failure into the FAILED state. So we report it here, and the caller sends the trade log
-    // message only if this method returns normally. Otherwise a peer which cancelled or failed the trade would still get
-    // the data.
-    private void applyUserTradeAction(BisqEasyTrade trade, BisqEasyTradeEvent event) {
+    // BisqEasyProtocol turns a failure into the FAILED state. So we report it here: the returned future fails with
+    // TradeActionNotAppliedException, and the caller sends the trade log message only if it completes normally.
+    // Otherwise a peer which cancelled or failed the trade would still get the data. A trade restriction is reported
+    // by an exception of this call (docs/specifications/trade/trade-log-of-user-actions.md).
+    private CompletableFuture<Void> applyUserTradeAction(BisqEasyTrade trade, BisqEasyTradeEvent event) {
         verifyTradingNotOnHalt();
         verifyMinVersionForTrading();
         String tradeId = trade.getId();
-        BisqEasyProtocol protocol = findProtocol(tradeId).orElseThrow(() ->
-                new TradeActionNotAppliedException("The trade has no protocol anymore. tradeId=" + tradeId));
-        if (trade.getTradeState().isFinalState()) {
-            throw new TradeActionNotAppliedException("The trade is in the final state " + trade.getTradeState());
-        }
-        protocol.handle(event);
-        BisqEasyTradeState state = trade.getTradeState();
-        if (state == BisqEasyTradeState.FAILED || state == BisqEasyTradeState.FAILED_AT_PEER) {
-            throw new TradeActionNotAppliedException("The trade failed at handling " + event.getClass().getSimpleName());
-        }
+        return tradeTaskExecutor.submit(tradeId, () -> {
+            BisqEasyProtocol protocol = findProtocol(tradeId).orElseThrow(() ->
+                    new TradeActionNotAppliedException("The trade has no protocol anymore. tradeId=" + tradeId));
+            if (trade.getTradeState().isFinalState()) {
+                throw new TradeActionNotAppliedException("The trade is in the final state " + trade.getTradeState());
+            }
+            protocol.handle(event);
+            BisqEasyTradeState state = trade.getTradeState();
+            if (state == BisqEasyTradeState.FAILED || state == BisqEasyTradeState.FAILED_AT_PEER) {
+                throw new TradeActionNotAppliedException("The trade failed at handling " + event.getClass().getSimpleName());
+            }
+        });
     }
 
-    private void handleBisqEasyTradeEvent(BisqEasyTrade trade, BisqEasyTradeEvent event) {
+    private CompletableFuture<Void> handleBisqEasyTradeEvent(BisqEasyTrade trade, BisqEasyTradeEvent event) {
         verifyTradingNotOnHalt();
         verifyMinVersionForTrading();
         String tradeId = trade.getId();
-        findProtocol(tradeId).ifPresentOrElse(protocol -> protocol.handle(event),
-                () -> log.info("Protocol with tradeId {} not found. This is expected if the trade have been closed already", tradeId));
+        return submitTradeTask(tradeId, () -> findProtocol(tradeId).ifPresentOrElse(protocol -> protocol.handle(event),
+                () -> log.info("Protocol with tradeId {} not found. This is expected if the trade have been closed already", tradeId)));
     }
 
 
@@ -793,7 +796,12 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
 
     // For a task for which no caller waits. Without the log, its failure would not be visible.
     private void runTradeTask(String tradeId, Runnable task) {
-        tradeTaskExecutor.submit(tradeId, task).whenComplete((nil, throwable) -> {
+        submitTradeTask(tradeId, task);
+    }
+
+    // For a task whose caller may ignore the result. A failure is logged, and the returned future fails as well.
+    private CompletableFuture<Void> submitTradeTask(String tradeId, Runnable task) {
+        return tradeTaskExecutor.submit(tradeId, task).whenComplete((nil, throwable) -> {
             if (throwable instanceof RejectedExecutionException) {
                 log.info("We did not run a task of trade {} because the trade service is shut down",
                         StringUtils.sanitizeForLog(tradeId));
