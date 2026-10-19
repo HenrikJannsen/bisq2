@@ -113,8 +113,6 @@ import static bisq.trade.bisq_easy.protocol.messages.BisqEasyReportErrorMessage.
 import static bisq.trade.bisq_easy.validation.BisqEasyOfferAmountValidator.validateOfferAmount;
 import static com.google.common.base.Preconditions.checkArgument;
 
-//TODO Consider to use async calls at handle (CompletableFuture.runAsync(()...)
-
 @Slf4j
 @Getter
 public class BisqEasyTradeService extends CoalescingPersistenceClient<BisqEasyTradeStore> implements Service, ConfidentialMessageService.Listener {
