@@ -308,7 +308,7 @@ public class BisqEasyTradeService extends RateLimitedPersistenceClient<BisqEasyT
                     e.getMessage());
             return;
         }
-        StartupReplay.forEach(tradeProtocolById.values().stream(), BisqEasyProtocol::handleQueuedEvents);
+        StartupReplay.forEach(protocolRegistry.getProtocols().stream(), BisqEasyProtocol::handleQueuedEvents);
     }
 
     private void handleBisqEasyTradeMessage(BisqEasyTradeMessage message, BisqEasyProtocol protocol) {
