@@ -170,8 +170,10 @@ public final class MuSigTradeService extends RateLimitedPersistenceClient<MuSigT
     private final PendingTradeMessages<MuSigTradeMessage> pendingTradeMessages = new PendingTradeMessages<>();
     private final Map<String, Scheduler> closeTradeTimeoutSchedulerByTradeId = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<Void>> observeDepositTxConfirmationStatusFutureByTradeId = new ConcurrentHashMap<>();
-    // Coordinates early-message buffering with protocol registration. Never acquire a protocol
-    // monitor or process messages while holding this lock; those operations can call blocking RPCs.
+    // Coordinates early-message buffering with protocol registration: the decision "no protocol, so the
+    // message is pending" and the registration of a protocol are one step, for trade, dispute and
+    // settlement messages. Never acquire a protocol monitor or process messages while holding this lock;
+    // those operations can call blocking RPCs.
     private final Object pendingMessagesLock = new Object();
     // Serializes maker-side trade creation so two concurrent take requests for the same trade id
     // cannot race a second trade or protocol into the registries.
@@ -460,19 +462,25 @@ public final class MuSigTradeService extends RateLimitedPersistenceClient<MuSigT
             handleMuSigTradeMessage(message, protocol.orElseThrow());
             return;
         }
-        findProtocol(tradeId).ifPresentOrElse(protocol -> {
-                    if (isMessageOfTradePeer(message, protocol)) {
-                        handleMuSigTradeMessage(message, protocol);
-                    } else {
-                        pendingTradeMessages.remove(message);
+        // A message which became pending after the take offer request processed the pending messages would not reach
+        // the protocol (rule 1 of docs/specifications/trade/pending-trade-messages.md)
+        Optional<MuSigProtocol> protocol;
+        synchronized (pendingMessagesLock) {
+            protocol = findProtocol(tradeId);
+            if (protocol.isEmpty()) {
+                pendingTradeMessages.add(message);
+            }
+        }
+        protocol.ifPresentOrElse(existingProtocol -> {
+                    if (isMessageOfTradePeer(message, existingProtocol)) {
+                        handleMuSigTradeMessage(message, existingProtocol);
                     }
                 },
                 () -> {
                     // Trade messages carry private data of the traders, so the log names only the message type.
                     log.info("Protocol with tradeId {} not found. We add the message of type {} to pendingMessages " +
-                                    "for re-processing when the next message arrives.",
+                                    "for processing when the protocol of the trade handles its next message.",
                             StringUtils.sanitizeForLog(tradeId), message.getClass().getSimpleName());
-                    pendingTradeMessages.add(message);
                 });
     }
 
@@ -519,15 +527,21 @@ public final class MuSigTradeService extends RateLimitedPersistenceClient<MuSigT
             } else {
                 protocol.handle(message);
             }
+            processPendingTradeMessages(protocol);
+        });
+    }
 
-            if (pendingTradeMessages.remove(message)) {
-                log.info("We remove the message of type {} with tradeId {} from pendingMessages.",
-                        message.getClass().getSimpleName(), StringUtils.sanitizeForLog(message.getTradeId()));
-            }
-
-            if (!pendingTradeMessages.isEmpty()) {
-                log.info("We have pendingMessages. We try to re-process them now.");
-                pendingTradeMessages.getMessagesInArrivalOrder().forEach(this::handleMuSigTradeMessage);
+    // Runs in a task of the trade. The pending messages of the trade became pending before the protocol existed (see
+    // pendingMessagesLock), so a maker processes them right after the take offer request. We take them out of the
+    // pending messages in one step. So two tasks which process messages of the trade never pass the same pending message
+    // to the protocol. Mediation settlement messages wait in their own pending messages.
+    private void processPendingTradeMessages(MuSigProtocol protocol) {
+        String tradeId = protocol.getTrade().getId();
+        pendingTradeMessages.removeMessagesOfTrade(tradeId).forEach(pendingMessage -> {
+            log.info("We remove the message of type {} with tradeId {} from pendingMessages.",
+                    pendingMessage.getClass().getSimpleName(), StringUtils.sanitizeForLog(tradeId));
+            if (isMessageOfTradePeer(pendingMessage, protocol)) {
+                protocol.handle(pendingMessage);
             }
         });
     }

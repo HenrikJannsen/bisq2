@@ -15,10 +15,14 @@ the trade cannot process yet is a queued trade message (see [Queued trade messag
 
 ## Rules
 
-1. A node keeps a trade message whose trade does not exist as a pending message. It processes the pending messages
-   again when it processes a trade message of an existing trade. A pending message which the node then passes to the
-   protocol of its trade is no longer pending. A pending message of an existing trade whose sender is not the trade
-   peer is dropped, as [Sender of a trade message](trade-message-sender.md) defines.
+1. A node keeps a trade message whose trade has no protocol yet as a pending message. The decision to keep a message
+   as pending and the creation of the protocol of its trade are one step. So a message which arrives while the node
+   creates the protocol either reaches the protocol directly, or is pending before the protocol exists. When the
+   protocol of a trade has handled a trade message, the node passes the pending messages of that trade to the protocol,
+   in arrival order. The protocol of a maker handles the take offer request right after the node created it. A
+   pending message which the node passes to the protocol is no longer pending, and the node passes each pending message
+   to the protocol only once. A pending message of an existing trade whose sender is not the trade peer is dropped, as
+   [Sender of a trade message](trade-message-sender.md) defines.
 2. A node keeps at most 100 pending messages. When a message arrives while the node keeps 100 pending messages, the
    node drops the oldest pending message and keeps the new one. A message which is already pending does not change
    the number or the order of the pending messages.
@@ -45,6 +49,17 @@ the trade cannot process yet is a queued trade message (see [Queued trade messag
 
 ## Reasons
 
+- Rule 1, one step: the network layer passes each message to the trade service in a task of its own, so the
+  messages of a trade can be processed at the same time (see [Startup replay](../network/startup-replay.md)). The
+  node acknowledges a message when it decrypts it, so the peer does not send it again (see
+  [Message acknowledgement](../network/message-acknowledgement.md)). Without the one step, a message could find no
+  protocol, then the take offer request could create the protocol and process the pending messages, and only then the
+  message could become pending. Only a later message of the trade would pass it to the protocol. When a seller takes
+  a buy offer and sends the payment account data right after the request, no such message comes: the buyer waits for
+  the account data, and the seller waits for the payment.
+- Rule 1, only once: a protocol must apply a message of the trade peer once. The state machine ignores a second copy
+  only of a message which changed the state of the trade. A MuSig protocol applies some messages without a change of
+  the state, and it would apply a second copy again.
 - Rule 2: anybody can send trade messages with made-up trade IDs to a node. Such a message never gets a trade, so
   without a bound it stays in memory until the node restarts, and the memory of the node grows without limit. A node
   has only a few trades whose messages can arrive before the trade exists, so 100 pending messages leave room for all
