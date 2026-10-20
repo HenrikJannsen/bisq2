@@ -283,8 +283,16 @@ public final class MuSigTradeService extends RateLimitedPersistenceClient<MuSigT
                 });
     }
 
+    // The next write of the trade store comes with the next event of any trade, which can be hours later, so a
+    // dropped state must not wait for it (docs/specifications/persistence/store-write-results.md).
+    @Override
+    protected boolean writeDroppedStateLater() {
+        return true;
+    }
+
     public CompletableFuture<Boolean> shutdown() {
         log.info("shutdown");
+        stopDeferredWrites();
         if (authorizedAlertDataSetPin != null) {
             authorizedAlertDataSetPin.unbind();
             authorizedAlertDataSetPin = null;
