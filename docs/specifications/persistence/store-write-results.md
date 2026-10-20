@@ -33,6 +33,13 @@ whose write it skipped because of the rate limit. Its next write, or the write a
 state again. A failure while the client copies its store for a write counts as a failed write: the
 client logs it as described above, keeps the state as unsaved, and its later writes run as usual.
 
+A persistence client which limits its write rate can ask that a dropped state does not wait for its
+next write. Then the client writes a state which the rate limit dropped as soon as the limit allows
+it, and a state which it dropped during a write right after that write, if the write succeeded. It
+does not repeat a failed copy or a failed write in this way. It schedules no such write after its
+owner shut it down. The write at shutdown still runs. The trade stores of Bisq Easy and MuSig ask
+for it. The other stores keep the old behavior.
+
 Reason: a persistence client reports a failed asynchronous write only as the result `false`, without
 the cause, and most callers do not read the result. Without the log entry, a node with a full disk
 runs on with data which it does not save, and nothing shows why the data is missing after the next
@@ -41,6 +48,12 @@ start.
 Reason for the failed copy: the client copies the store in the thread which asks for the write, while
 other threads can change the store. Before this rule, a copy which threw left the client marked as
 writing, so it dropped every later write of the store until shutdown.
+
+Reason for the later write of a dropped state: the next write of a trade store comes with the next
+event of any trade, which can come hours later. A node which stopped without a regular shutdown in
+that time lost the last state of a trade, for example after a message of the peer, which the peer
+does not send again. A failed write is not repeated every second, so that a full disk does not fill
+the log. Whether the other stores should also write a dropped state later is open.
 
 Reason for the unsaved state: the write at shutdown runs only when the client knows that its state is
 not on disk. Before this rule a failed write did not count as unsaved, so a change after which the

@@ -111,6 +111,8 @@ trade service keeps them. Queued trade messages belong to a trade which exists, 
 
 ## Not covered
 
-How often the trade services write their store. They write it at most once per second and at a regular shutdown. If
-the node stops without a regular shutdown, it can lose a queued trade message which arrived shortly before, as it can
-lose every other recent change of a trade.
+How often the trade services write their store. They write it at most once per second. A state which this limit
+dropped, they write as soon as the limit allows it, and at a regular shutdown (see
+[Store write results](../persistence/store-write-results.md)). If the node stops without a regular shutdown, it can
+lose a queued trade message which arrived less than about a second before, as it can lose every other recent change
+of a trade.
