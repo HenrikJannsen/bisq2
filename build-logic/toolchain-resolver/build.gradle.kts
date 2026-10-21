@@ -15,3 +15,13 @@ gradlePlugin {
         }
     }
 }
+
+dependencies {
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.mockito)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+    useJUnitPlatform()
+}

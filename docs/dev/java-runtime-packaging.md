@@ -29,7 +29,7 @@ migration a prerequisite for this work.
 - The `generateInstallers` task sets both `jdkDirectory` and `runtimeImageDirectory` to the same toolchain directory.
 - `JPackageTask` calls `<jdkDirectory>/bin/jpackage`.
 - `PackageFactory` always passes `--runtime-image <runtimeImageDirectory>` to `jpackage`.
-- `build-logic/toolchain-resolver` pins Zulu JDK download URLs, not JRE URLs.
+- `build-logic/toolchain-resolver` pins Zulu JDK download URLs and their SHA-256, not JRE URLs.
 - The launcher comment says "JRE", but the build currently provides the full JDK image.
 
 The current implementation therefore conflates two separate concerns:
