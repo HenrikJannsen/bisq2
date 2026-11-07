@@ -35,7 +35,8 @@ renormalize these files.
 
 After a reviewed wrapper change, for example `./gradlew wrapper --gradle-version <version>`, recompute and review the
 checksums and update `gradle/wrapper/gradle-wrapper.sha256`, `distributionSha256Sum` and `releaseBuild.gradleVersion`
-in the same change:
+in the same change. The toolchain resolver accepts only the Gradle versions whose name for a provisioned JDK archive
+was checked (`ToolchainArchiveName`). Check the naming of the new version and add it there:
 
 ```bash
 sha256sum gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties

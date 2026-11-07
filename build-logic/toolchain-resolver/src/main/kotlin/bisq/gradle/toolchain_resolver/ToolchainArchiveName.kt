@@ -7,13 +7,14 @@ import org.gradle.util.GradleVersion
 // download when that file exists, which is what lets the resolver put a verified archive there first. Gradle 8
 // (verified with 8.9) uses the file name the server reports. Gradle 9 (verified with 9.0.0) appends the vendor and
 // the language version of the toolchain spec, see buildFileNameWithDetails in its JavaToolchainProvisioningService.
-// A Gradle this object does not know fails the build, so that a changed naming cannot silently skip the check.
+// Only the Gradle versions whose naming was checked are accepted. Any other Gradle, also a minor or patch release,
+// fails the build: if its naming differed, Gradle would not find the verified file and would download and unpack an
+// unchecked copy without an error.
 internal object ToolchainArchiveName {
     fun of(gradleVersion: GradleVersion, serverFileName: String, vendorDescription: String, languageVersion: Int): String {
-        val major = gradleVersion.baseVersion.version.substringBefore('.').toInt()
-        return when (major) {
-            8 -> serverFileName
-            9 -> addSuffixToName(serverFileName, toSafeFileName("-$vendorDescription-$languageVersion"))
+        return when (gradleVersion.baseVersion.version) {
+            "8.9" -> serverFileName
+            "9.0.0" -> addSuffixToName(serverFileName, toSafeFileName("-$vendorDescription-$languageVersion"))
             else -> throw GradleException(
                     "BisqToolchainResolver does not know how Gradle ${gradleVersion.version} names a provisioned " +
                             "toolchain archive. Check its JavaToolchainProvisioningService and extend ToolchainArchiveName."

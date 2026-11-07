@@ -46,16 +46,12 @@ class ToolchainArchiveNameTest {
     }
 
     @Test
-    void aGradle9PatchOrMinorReleaseUsesTheGradle9Naming() {
-        assertEquals("zulu21-Azul#20Zulu-21.54.107-ca-jdk21.0.13-linux_x64.zip",
-                NAME.of(GradleVersion.version("9.2.1"), ZIP, "Azul Zulu", 21));
-    }
+    void anUncheckedGradleFailsInsteadOfGuessing() {
+        for (String version : new String[]{"8.14.3", "9.0.1", "9.2.1", "10.0"}) {
+            GradleException exception = assertThrows(GradleException.class,
+                    () -> NAME.of(GradleVersion.version(version), ZIP, "Azul Zulu", 21));
 
-    @Test
-    void anUnknownGradleFailsInsteadOfGuessing() {
-        GradleException exception = assertThrows(GradleException.class,
-                () -> NAME.of(GradleVersion.version("10.0"), ZIP, "Azul Zulu", 21));
-
-        assertTrue(exception.getMessage().contains("10.0"), exception.getMessage());
+            assertTrue(exception.getMessage().contains(version), exception.getMessage());
+        }
     }
 }
