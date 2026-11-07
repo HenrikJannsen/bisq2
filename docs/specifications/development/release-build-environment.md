@@ -23,5 +23,26 @@ The Java update version does not identify a unique Zulu build. A broader CI requ
 which may report a different `java.version` and fail release verification. It can also change release build inputs
 without a reviewed configuration change.
 
-When the build JDK changes, update the CI requests, pinned environment properties, and toolchain URLs in the same
-change set. See [the Gradle notes](../../../gradle/README.md) for the current values.
+## Toolchain archives
+
+Gradle downloads a JDK through the toolchain resolver when no installed JDK matches the toolchain request. The
+installers bundle the toolchain JDK as their runtime, so a modified archive on the download server must not reach a
+build. The resolver must pin the SHA-256 of each archive it returns and must verify the archive before Gradle unpacks
+it. A mismatch must fail the build. A platform without a pinned archive must get no archive: a JDK of another
+architecture does not run.
+
+Gradle has no checksum for a toolchain download. The resolver therefore downloads and verifies the archive itself and
+stores it where Gradle looks for an archive which is already there. This location depends on the naming of the Gradle
+version. The resolver must accept only Gradle versions whose naming was checked. With another naming, Gradle would
+download an unchecked copy without an error.
+
+Known limitation: Gradle sends its own request to the download server to learn the file name. A server which answers
+this request with another file name than the resolver's request makes Gradle download an unchecked copy. The resolver
+refuses a response with a `Content-Disposition` header, so a modified file which the server sends the same way to
+every client fails the build. Gradle also downloads again without the check when unpacking the stored archive fails or
+the unpacked JDK does not match the toolchain request; the resolver detects the replaced archive at the next build.
+Gradle 9.0.0 cannot download a toolchain from a local `file:` URI, so it cannot take the verified local file instead.
+The limitation stays until Gradle can verify a toolchain download or take a local archive.
+
+When the build JDK changes, update the CI requests, pinned environment properties, and toolchain URLs with their
+SHA-256 in the same change set. See [the Gradle notes](../../../gradle/README.md) for the current values.
